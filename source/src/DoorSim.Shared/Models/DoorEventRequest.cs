@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace DoorSim.Shared.Models;
 
 public record DoorEventRequest(int ReaderId, DoorEventType EventType, int? CardEntryId = null);
@@ -10,9 +12,15 @@ public record RawDoorEventRequest(
     ushort FacilityCode,
     WiegandFormat Format);
 
+[Description("What kind of event to simulate.")]
 public enum DoorEventType
 {
-    CardReadOnly, // Wiegand send only — no door movement
-    AccessCycle, // Card read + door open + door close
-    EgressCycle // REX trip + door open + door close + REX reset
+    [Description("Wiegand card send only — no door movement.")]
+    CardReadOnly,
+
+    [Description("Card read followed by a door open + door close cycle.")]
+    AccessCycle,
+
+    [Description("REX trip followed by a door open + door close cycle, then REX reset.")]
+    EgressCycle,
 }

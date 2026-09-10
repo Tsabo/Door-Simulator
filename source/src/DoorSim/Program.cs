@@ -1,8 +1,8 @@
-using DoorSim.Data;
+using System.Text.Json.Serialization;
 using DoorSim.Endpoints;
-using DoorSim.Hardware;
-using DoorSim.Services;
-using Microsoft.EntityFrameworkCore;
+using DoorSim.OpenApi;
+using Microsoft.OpenApi;
+using Scalar.AspNetCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,6 +35,7 @@ builder.Services.AddSingleton<GpioController?>(sp =>
         log.LogWarning("Not running on Linux — GPIO disabled (dev mode)");
         return null;
     }
+
     try
     {
         var gpio = new GpioController();
@@ -58,10 +59,35 @@ builder.Services.AddSingleton<SimulationOrchestrator>();
 // Data
 builder.Services.AddDbContext<DoorSimDbContext>(opt =>
     opt.UseSqlite(builder.Configuration.GetConnectionString("DoorSim")
-        ?? "Data Source=doorsim.db"));
+                  ?? "Data Source=doorsim.db"));
 
 builder.Services.AddScoped<CardLibraryService>();
 builder.Services.AddScoped<DoorConfigService>();
+
+// Enums serialize as their string name (e.g. "Wiegand26") rather than the default integer —
+// self-explanatory on the wire and in the generated OpenAPI schema. Keep in sync with the
+// Blazor client, which uses the matching DoorSimJson.Options for the same reason.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+// API documentation — always available, not gated to Development.
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, context, ct) =>
+    {
+        document.Info = new OpenApiInfo
+        {
+            Title = "DoorSim API",
+            Version = "v1",
+            Description = "Access-control reader/door simulator API — "
+                          + "card library, door configuration, and simulation control.",
+        };
+
+        return Task.CompletedTask;
+    });
+
+    options.AddSchemaTransformer<EnumDescriptionSchemaTransformer>();
+});
 
 // -------------------------------------------------------------------------
 // Build
@@ -75,6 +101,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     var db = scope.ServiceProvider.GetRequiredService<DoorSimDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
         .CreateLogger(nameof(DatabaseInitializer));
+
     await DatabaseInitializer.InitializeAsync(db, logger);
 }
 
@@ -98,6 +125,12 @@ app.MapCardsEndpoints();
 app.MapDoorsEndpoints();
 app.MapSimulationEndpoints();
 app.MapSettingsEndpoints();
+
+// API documentation — always available, not gated to Development.
+// ScalarOptions.ProxyUrl defaults to null (no proxy), which is what we want for
+// this local-network tool — "Try it" hits the API directly.
+app.MapOpenApi(); // serves /openapi/v1.json
+app.MapScalarApiReference(options => options.WithTitle("DoorSim API")); // UI at /scalar/v1
 
 app.MapFallbackToFile("index.html");
 

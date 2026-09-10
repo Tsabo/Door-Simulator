@@ -1,26 +1,26 @@
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+
 namespace DoorSim.Client.Services;
 
 /// <summary>HTTP client wrapper for the /api/simulate endpoints.</summary>
 public class SimulationApiClient(HttpClient http)
 {
-    private static readonly System.Text.Json.JsonSerializerOptions _jsonOptions =
-        new(System.Text.Json.JsonSerializerDefaults.Web);
-
     public async Task RunEventAsync(DoorEventRequest request)
     {
-        var response = await http.PostAsJsonAsync("/api/simulate/event", request);
+        var response = await http.PostAsJsonAsync("/api/simulate/event", request, DoorSimJson.Options);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task SendCardAsync(RawCardRequest request)
     {
-        var response = await http.PostAsJsonAsync("/api/simulate/send-card", request);
+        var response = await http.PostAsJsonAsync("/api/simulate/send-card", request, DoorSimJson.Options);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task RunRawEventAsync(RawDoorEventRequest request)
     {
-        var response = await http.PostAsJsonAsync("/api/simulate/raw-event", request);
+        var response = await http.PostAsJsonAsync("/api/simulate/raw-event", request, DoorSimJson.Options);
         response.EnsureSuccessStatusCode();
     }
 
@@ -43,17 +43,16 @@ public class SimulationApiClient(HttpClient http)
     }
 
     public async Task<SimulationStatus> GetStatusAsync(int readerId) =>
-        await http.GetFromJsonAsync<SimulationStatus>($"/api/simulate/status/{readerId}");
+        await http.GetFromJsonAsync<SimulationStatus>($"/api/simulate/status/{readerId}", DoorSimJson.Options);
 
     public async Task<bool> GetConnectivityAsync(int readerId) =>
-        await http.GetFromJsonAsync<bool>($"/api/simulate/connectivity/{readerId}");
+        await http.GetFromJsonAsync<bool>($"/api/simulate/connectivity/{readerId}", DoorSimJson.Options);
 
     /// <summary>
     /// Opens a persistent SSE connection and yields status snapshots as they arrive.
     /// Reconnects automatically on transient errors after a 2-second delay.
     /// </summary>
-    public async IAsyncEnumerable<DoorStatusUpdate[]> SubscribeAsync(
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<DoorStatusUpdate[]> SubscribeAsync([EnumeratorCancellation] CancellationToken ct = default)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -67,7 +66,8 @@ public class SimulationApiClient(HttpClient http)
                 try
                 {
                     more = await enumerator.MoveNextAsync();
-                    if (more) batch = enumerator.Current;
+                    if (more)
+                        batch = enumerator.Current;
                 }
                 catch (OperationCanceledException)
                 {
@@ -82,8 +82,7 @@ public class SimulationApiClient(HttpClient http)
                 // yield is outside the try/catch
                 if (batch is not null)
                     yield return batch;
-            }
-            while (more);
+            } while (more);
 
             await enumerator.DisposeAsync();
 
@@ -96,25 +95,27 @@ public class SimulationApiClient(HttpClient http)
     /// Opens one SSE connection and streams lines until the connection closes or
     /// the token is cancelled. No catch clause — exceptions propagate to the caller.
     /// </summary>
-    private async IAsyncEnumerable<DoorStatusUpdate[]> ReadStreamOnceAsync(
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    private async IAsyncEnumerable<DoorStatusUpdate[]> ReadStreamOnceAsync([EnumeratorCancellation] CancellationToken ct = default)
     {
         using var response = await http.GetAsync(
             "/api/simulate/stream", HttpCompletionOption.ResponseHeadersRead, ct);
+
         response.EnsureSuccessStatusCode();
 
-        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream);
 
         while (!ct.IsCancellationRequested)
         {
             var line = await reader.ReadLineAsync(ct);
-            if (line is null) yield break; // server closed — outer loop will reconnect
+            if (line is null)
+                yield break; // server closed — outer loop will reconnect
 
-            if (!line.StartsWith("data: ")) continue;
+            if (!line.StartsWith("data: "))
+                continue;
 
-            var updates = System.Text.Json.JsonSerializer.Deserialize<DoorStatusUpdate[]>(
-                line["data: ".Length..], _jsonOptions);
+            var updates = JsonSerializer.Deserialize<DoorStatusUpdate[]>(
+                line["data: ".Length..], DoorSimJson.Options);
 
             if (updates is not null)
                 yield return updates;
