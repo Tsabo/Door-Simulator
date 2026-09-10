@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+  Vendored copy of OSDP.Net (https://github.com/Z-bit-Systems-LLC/OSDP.Net), merged forward
+  to v5.1.0, patched to make the hardcoded 8-second connection timeout (Device.cs,
+  PdMessageSecureChannel.cs) and the hardcoded 200ms reply/inter-byte timeout
+  (SerialPortConnectionListener.cs) configurable, which are too tight for slower-polling panels
+  (e.g. Mercury MP1502, observed polling at ~3s intervals with real-world jitter) and a shared
+  USB bus with occasional inter-byte gaps. See DeviceConfiguration.ConnectionTimeout and
+  SerialPortConnectionListener.ReplyTimeout. Still needed as of v5.1.0 — upstream has not fixed
+  this. See NOTICE.md.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>default</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.6" />
+    <PackageReference Include="System.Collections.Immutable" Version="10.0.6" />
+    <PackageReference Include="System.IO.Ports" Version="10.0.6" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,192 @@
+@* SVG mock of an access control reader that reflects the
+   panel's last osdp_LED / osdp_BUZ commands for OSDP readers, and shows
+   simulation-status-based feedback for Wiegand readers. *@
+
+<div class="mock-reader-wrap">
+    <svg viewBox="0 0 80 112" width="80" height="112"
+         xmlns="http://www.w3.org/2000/svg"
+         aria-label="Reader @Label">
+
+        @* --- Body shadow --- *@
+        <rect x="3" y="3" width="76" height="108" rx="11" fill="rgba(0,0,0,0.25)"/>
+
+        @* --- Main body --- *@
+        <rect x="0" y="0" width="76" height="108" rx="11" fill="#1c1c1e"/>
+
+        @* --- Subtle edge highlight --- *@
+        <rect x="1" y="1" width="74" height="106" rx="10"
+              fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+
+        @* --- LED bar (the coloured strip at the top, like on a real reader) --- *@
+        <rect x="7" y="7" width="62" height="14" rx="5"
+              fill="@LedCssColor"
+              class="@LedClass"
+              filter="url(#glow)"/>
+
+        @* --- Glow filter: softens / blooms the LED bar --- *@
+        <defs>
+            <filter id="glow-@_uid" x="-50%" y="-100%" width="200%" height="350%">
+                <feGaussianBlur stdDeviation="3" result="blur"/>
+                <feMerge>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+            </filter>
+        </defs>
+        <rect x="7" y="7" width="62" height="14" rx="5"
+              fill="@LedCssColor" opacity="0.35"
+              filter="url(#glow-@_uid)"/>
+
+        @* --- Reader face plate --- *@
+        <rect x="8" y="30" width="60" height="56" rx="6" fill="#252528"/>
+
+        @* --- Tap / contactless arcs (NFC icon style) --- *@
+        <g stroke="@TapIconColor" stroke-linecap="round" fill="none">
+            @* innermost arc *@
+            <path d="M 34 53 A 6 6 0 0 1 42 53" stroke-width="2.2"/>
+            @* middle arc *@
+            <path d="M 29 59 A 11 11 0 0 1 47 59" stroke-width="2.2" opacity="0.7"/>
+            @* outer arc *@
+            <path d="M 24 65 A 16 16 0 0 1 52 65" stroke-width="2.2" opacity="0.4"/>
+            @* card base *@
+            <line x1="35" y1="48" x2="41" y2="48" stroke-width="2.5"/>
+        </g>
+
+        @* --- Protocol badge (top-right corner) --- *@
+        <rect x="48" y="32" width="16" height="8" rx="2" fill="@ProtocolBadgeFill"/>
+        <text x="56" y="39" font-family="system-ui, sans-serif" font-size="4.8"
+              fill="white" text-anchor="middle">
+            @Protocol.ToString().ToUpper()
+        </text>
+
+        @* --- OSDP connectivity dot (bottom-right of face plate, OSDP only) --- *@
+        @if (Protocol == ProtocolType.Osdp)
+        {
+            <circle cx="63" cy="81" r="3.5"
+                    fill="@(IsConnected
+                              ? "#22c55e"
+                              : "#ef4444")"
+                    title="@(IsConnected
+                               ? "Panel connected"
+                               : "Panel disconnected")"/>
+            <circle cx="63" cy="81" r="3.5"
+                    fill="none" stroke="rgba(0,0,0,0.3)" stroke-width="0.8"/>
+        }
+
+        @* --- Buzzer indicator (small wave icon, shown when buzzer is active) --- *@
+        @if (LedState?.BuzzerActive == true)
+        {
+            <g stroke="#fbbf24" stroke-linecap="round" fill="none" opacity="0.9">
+                <path d="M 15 40 Q 13 43 15 46" stroke-width="1.8"/>
+                <path d="M 12 38 Q 9  43 12 48" stroke-width="1.8" opacity="0.6"/>
+            </g>
+        }
+
+        @* --- Brand text --- *@
+        <text x="38" y="97" font-family="system-ui, sans-serif" font-size="5.5"
+              fill="#3a3a3c" text-anchor="middle" letter-spacing="0.8">
+            DoorSim
+        </text>
+
+        @* --- Screw dots (cosmetic) --- *@
+        <circle cx="14" cy="97" r="2" fill="#2a2a2c"/>
+        <circle cx="62" cy="97" r="2" fill="#2a2a2c"/>
+        <circle cx="14" cy="97" r="1" fill="#111"/>
+        <circle cx="62" cy="97" r="1" fill="#111"/>
+
+    </svg>
+
+    @* --- LED state label (only for OSDP — shows what the panel commanded) --- *@
+    @*
+    @if (Protocol == ProtocolType.Osdp && LedState is not null)
+    {
+        
+        <div class="led-label" style="color: @LedCssColor;">
+            @LedColorLabel@(LedState.Blink ? " \u25cc" : "")@(LedState.BuzzerActive ? " \uD83D\uDD14" : "")
+        </div>
+    }
+    *@
+</div>
+
+@code {
+
+    [Parameter]
+    [EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter]
+    [EditorRequired]
+    public ProtocolType Protocol { get; set; }
+
+    [Parameter]
+    public bool IsConnected { get; set; }
+
+    [Parameter]
+    public ReaderLedState? LedState { get; set; }
+
+    [Parameter]
+    public SimulationStatus SimStatus { get; set; }
+
+    // Unique suffix so multiple readers on one page don't share the same SVG filter ID.
+    private readonly string _uid = Guid.NewGuid().ToString("N")[..8];
+
+    // -------------------------------------------------------------------------
+    // Effective LED color
+    // -------------------------------------------------------------------------
+
+    // For OSDP: use what the panel commanded.
+    // For Wiegand: derive a colour from simulation status so there is still
+    //              a visual cue even though there is no back-channel.
+    private OsdpLedColor EffectiveColor => Protocol == ProtocolType.Osdp && LedState is not null
+        ? LedState.Color
+        : SimStatus switch
+        {
+            SimulationStatus.Running => OsdpLedColor.Amber,
+            SimulationStatus.Success => OsdpLedColor.Green,
+            SimulationStatus.Error => OsdpLedColor.Red,
+            _ => OsdpLedColor.Off
+        };
+
+    private bool EffectiveBlink => Protocol == ProtocolType.Osdp
+        ? LedState?.Blink ?? false
+        : SimStatus == SimulationStatus.Running;
+
+    private string LedCssColor => EffectiveColor switch
+    {
+        OsdpLedColor.Red => "#ef4444",
+        OsdpLedColor.Green => "#22c55e",
+        OsdpLedColor.Amber => "#f59e0b",
+        OsdpLedColor.Blue => "#3b82f6",
+        OsdpLedColor.Magenta => "#d946ef",
+        OsdpLedColor.Cyan => "#06b6d4",
+        OsdpLedColor.White => "#f8fafc",
+        _ => "#2a2a2c" // Off — matches body colour
+    };
+
+    private string LedColorLabel => EffectiveColor switch
+    {
+        OsdpLedColor.Off => "Off",
+        OsdpLedColor.Red => "Red",
+        OsdpLedColor.Green => "Green",
+        OsdpLedColor.Amber => "Amber",
+        OsdpLedColor.Blue => "Blue",
+        OsdpLedColor.Magenta => "Magenta",
+        OsdpLedColor.Cyan => "Cyan",
+        OsdpLedColor.White => "White",
+        _ => "Off"
+    };
+
+    private string LedClass => EffectiveBlink
+        ? "led-blink"
+        : string.Empty;
+
+    // Tap icon follows the LED color when lit, otherwise a neutral dim grey.
+    private string TapIconColor => EffectiveColor == OsdpLedColor.Off
+        ? "#444"
+        : LedCssColor;
+
+    private string ProtocolBadgeFill => Protocol == ProtocolType.Osdp
+        ? "#2563eb"
+        : "#78716c";
+
+}

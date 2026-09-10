@@ -1,0 +1,140 @@
+@page "/settings"
+@inject SettingsApiClient SettingsClient
+
+<PageTitle>Settings — DoorSim</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-6">Settings</MudText>
+
+@if (_loading)
+{
+    <MudContainer Class="d-flex justify-center mt-16">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    </MudContainer>
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Simulation Timing</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Tertiary">
+                            Applied globally to all doors and all simulation cycles.
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+
+                <MudCardContent>
+                    <MudNumericField T="int" @bind-Value="_form.CardToDoorDelayMs"
+                                     Label="Card-to-door delay (ms)"
+                                     Min="0"
+                                     Max="10000"
+                                     Step="100"
+                                     HelperText="Delay after card read before the door unlocks"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Class="mb-4" />
+
+                    <MudNumericField T="int" @bind-Value="_form.DoorOpenMs"
+                                     Label="Door open duration (ms)"
+                                     Min="500"
+                                     Max="60000"
+                                     Step="500"
+                                     HelperText="How long the door stays open before closing"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Class="mb-4" />
+
+                    <MudNumericField T="int" @bind-Value="_form.RexLeadMs"
+                                     Label="REX lead time (ms)"
+                                     Min="0"
+                                     Max="5000"
+                                     Step="100"
+                                     HelperText="How long REX is active before the door opens (egress cycle)"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Class="mb-4" />
+
+                    <MudNumericField T="int" @bind-Value="_form.QuickRexMs"
+                                     Label="Quick REX duration (ms)"
+                                     Min="500"
+                                     Max="30000"
+                                     Step="500"
+                                     HelperText="How long a standalone REX pulse lasts (no door movement)"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense" />
+
+                    @if (_error is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-4">@_error</MudAlert>
+                    }
+
+                    @if (_saved)
+                    {
+                        <MudAlert Severity="Severity.Success" Dense="true" Class="mt-4">Settings saved.</MudAlert>
+                    }
+                </MudCardContent>
+
+                <MudCardActions>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="SaveAsync"
+                               Disabled="@_saving">
+                        @(_saving ? "Saving…" : "Save")
+                    </MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private TimingFormModel _form = new();
+    private bool _loading = true;
+    private bool _saving;
+    private bool _saved;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var current = await SettingsClient.GetTimingAsync();
+        _form = new TimingFormModel
+        {
+            CardToDoorDelayMs = current.CardToDoorDelayMs,
+            DoorOpenMs        = current.DoorOpenMs,
+            RexLeadMs         = current.RexLeadMs,
+            QuickRexMs        = current.QuickRexMs,
+        };
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _saved  = false;
+        _error  = null;
+
+        var dto = new SimulationTimingSettings(
+            _form.CardToDoorDelayMs,
+            _form.DoorOpenMs,
+            _form.RexLeadMs,
+            _form.QuickRexMs);
+
+        var (_, error) = await SettingsClient.UpdateTimingAsync(dto);
+        if (error is not null)
+            _error = error;
+        else
+            _saved = true;
+
+        _saving = false;
+    }
+
+    private sealed class TimingFormModel
+    {
+        public int CardToDoorDelayMs { get; set; } = 500;
+        public int DoorOpenMs        { get; set; } = 5000;
+        public int RexLeadMs         { get; set; } = 500;
+        public int QuickRexMs        { get; set; } = 2000;
+    }
+}

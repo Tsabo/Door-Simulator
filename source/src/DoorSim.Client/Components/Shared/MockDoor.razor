@@ -1,0 +1,272 @@
+@*
+    SVG mock door showing DPS (door position) and REX (request-to-exit) state.
+    Only renders when HasDps is true. REX trigger only shows when HasRex is true.
+    Clicking the door toggles its open/closed state via OnDoorToggle.
+    Clicking the REX sensor fires OnRexTrigger (quick trip + auto-reset).
+*@
+
+@if (HasDps)
+{
+    <div class="mock-door-wrap">
+
+        @* ── Door SVG (clickable toggle) ───────────────────────────────────── *@
+        <button class="door-btn" @onclick="HandleDoorToggle"
+                disabled="@Busy"
+                title="@(DoorIsOpen
+                           ? "Click to close door"
+                           : "Click to open door")"
+                aria-label="@(DoorIsOpen
+                                ? "Door open — click to close"
+                                : "Door closed — click to open")">
+
+            <svg viewBox="0 0 80 112" width="80" height="112"
+                 xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    @* Radial glow for the open-door interior *@
+                    <radialGradient id="open-glow-@_uid" cx="55%" cy="45%" r="50%">
+                        <stop offset="0%" stop-color="#ffe97a" stop-opacity="0.18"/>
+                        <stop offset="100%" stop-color="#ffe97a" stop-opacity="0"/>
+                    </radialGradient>
+                    @* Inner shadow for raised door panels *@
+                    <filter id="panel-shadow-@_uid" x="-5%" y="-5%" width="110%" height="110%">
+                        <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#00000033"/>
+                    </filter>
+                </defs>
+
+                @* ── Drop shadow ─── *@
+                <rect x="3" y="3" width="74" height="106" rx="11" fill="rgba(0,0,0,0.22)"/>
+
+                @* ── Outer frame ─── *@
+                <rect x="0" y="0" width="74" height="106" rx="11" fill="#3E2723"/>
+
+                @* ── Frame edge highlight ─── *@
+                <rect x="1" y="1" width="72" height="104" rx="10"
+                      fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+
+                @if (!DoorIsOpen)
+                {
+                    @* ════════════ CLOSED ════════════ *@
+
+                    @* Door panel *@
+                    <rect x="7" y="7" width="60" height="88" rx="3" fill="#6D4C41"/>
+
+                    @* Upper raised panel *@
+                    <rect x="13" y="13" width="48" height="31" rx="2.5"
+                          fill="#7B5448" filter="url(#panel-shadow-@_uid)"/>
+                    <rect x="13" y="13" width="48" height="31" rx="2.5"
+                          fill="none" stroke="#5D4037" stroke-width="1.2"/>
+                    <rect x="14" y="14" width="48" height="31" rx="2.5"
+                          fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+
+                    @* Lower raised panel *@
+                    <rect x="13" y="50" width="48" height="37" rx="2.5"
+                          fill="#7B5448" filter="url(#panel-shadow-@_uid)"/>
+                    <rect x="13" y="50" width="48" height="37" rx="2.5"
+                          fill="none" stroke="#5D4037" stroke-width="1.2"/>
+                    <rect x="14" y="51" width="48" height="37" rx="2.5"
+                          fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+
+                    @* Hinge top *@
+                    <rect x="7" y="16" width="5" height="10" rx="1.5" fill="#4E342E"/>
+                    <rect x="8" y="16.5" width="2" height="9" rx="1" fill="rgba(255,255,255,0.12)"/>
+
+                    @* Hinge bottom *@
+                    <rect x="7" y="73" width="5" height="10" rx="1.5" fill="#4E342E"/>
+                    <rect x="8" y="73.5" width="2" height="9" rx="1" fill="rgba(255,255,255,0.12)"/>
+
+                    @* Knob backplate *@
+                    <rect x="58" y="45" width="7" height="13" rx="2" fill="#4E342E"/>
+
+                    @* Knob — gold sphere *@
+                    <circle cx="61.5" cy="51.5" r="4.5" fill="#7A5A00"/>
+                    <circle cx="61.5" cy="51.5" r="3.3" fill="#D4AC0D"/>
+                    <circle cx="60.2" cy="50.2" r="1" fill="rgba(255,255,255,0.45)"/>
+
+                    @* Keyhole *@
+                    <circle cx="61.5" cy="57.5" r="1.5" fill="#3E2723"/>
+                    <path d="M60.2,58.8 L62.8,58.8 L63.4,62.5 L59.6,62.5 Z" fill="#3E2723"/>
+                }
+                else
+                {
+                    @* ════════════ OPEN ════════════ *@
+
+                    @* Dark interior *@
+                    <rect x="7" y="7" width="60" height="88" rx="3" fill="#0d1520"/>
+
+                    @* Ambient light glow from the outside world *@
+                    <rect x="7" y="7" width="60" height="88" rx="3"
+                          fill="url(#open-glow-@_uid)"/>
+
+                    @* Door panel swung to the wall — shown as a thin left edge *@
+                    <rect x="7" y="7" width="10" height="88" rx="3" fill="#6D4C41"/>
+                    <rect x="14" y="7" width="2" height="88" fill="#5D4037"/>
+
+                    @* Knob visible on the swung edge *@
+                    <circle cx="12" cy="51.5" r="3.5" fill="#D4AC0D"/>
+                    <circle cx="10.8" cy="50.4" r="0.9" fill="rgba(255,255,255,0.38)"/>
+
+                    @* Dashed arc suggesting the swing path of the door *@
+                    <path d="M 16,7 Q 70,7 67,95"
+                          fill="none" stroke="#8D6E63" stroke-width="1.5"
+                          stroke-dasharray="4,3" opacity="0.38"/>
+
+                    @* Walk-through chevron — subtle invite to pass *@
+                    <g opacity="0.22" fill="none" stroke="#90CAF9" stroke-width="1.6"
+                       stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="34,52 42,44 50,52"/>
+                        <line x1="42" y1="44" x2="42" y2="68"/>
+                    </g>
+                }
+
+                @* ── Bottom info bar (always visible) ─── *@
+                <line x1="12" y1="97" x2="62" y2="97"
+                      stroke="rgba(255,255,255,0.12)" stroke-width="0.8"/>
+                <text x="37" y="104" font-family="system-ui, sans-serif" font-size="4.8"
+                      fill="rgba(255,255,255,0.42)" text-anchor="middle" letter-spacing="0.4">
+                    @(DpsNormallyOpen
+                        ? "NO · FAIL SAFE"
+                        : "NC · FAIL SECURE")
+                </text>
+            </svg>
+
+            @* State label below the door *@
+            @*
+            <span class="door-state-label @(DoorIsOpen ? "label-open" : "label-closed")">
+                @(DoorIsOpen ? "Open" : "Closed")
+            </span>
+            *@
+        </button>
+
+        @* ── REX / PIR sensor trigger ──────────────────────────────────────── *@
+        @if (HasRex)
+        {
+            <button class="rex-btn @(RexIsActive
+                                       ? "rex-active"
+                                       : "")"
+                    @onclick="HandleRexTrigger"
+                    disabled="@Busy"
+                    title="@(RexNormallyOpen
+                               ? "Trigger REX (NO · Fail Safe)"
+                               : "Trigger REX (NC · Fail Secure)")">
+
+                <svg viewBox="0 0 56 42" width="56" height="42"
+                     xmlns="http://www.w3.org/2000/svg">
+
+                    @{
+                        var arc = RexIsActive
+                            ? "#ef4444"
+                            : "#546E7A";
+
+                        var ao1 = RexIsActive
+                            ? "0.80"
+                            : "0.45";
+
+                        var ao2 = RexIsActive
+                            ? "0.55"
+                            : "0.30";
+
+                        var ao3 = RexIsActive
+                            ? "0.35"
+                            : "0.15";
+                    }
+
+                    @* Outer detection arc *@
+                    <path d="M4,30 Q8,6 28,3 Q48,6 52,30"
+                          fill="none" stroke="@arc" stroke-width="1.3"
+                          stroke-dasharray="3,2.5" opacity="@ao1"/>
+                    @* Middle arc *@
+                    <path d="M9,30 Q13,13 28,10 Q43,13 47,30"
+                          fill="none" stroke="@arc" stroke-width="1.1"
+                          stroke-dasharray="3,2.5" opacity="@ao2"/>
+                    @* Inner arc *@
+                    <path d="M15,30 Q17,19 28,17 Q39,19 41,30"
+                          fill="none" stroke="@arc" stroke-width="1"
+                          opacity="@ao3"/>
+
+                    @* Beam lines *@
+                    <line x1="4" y1="30" x2="1" y2="5"
+                          stroke="@arc" stroke-width="1.1" opacity="@ao2"/>
+                    <line x1="52" y1="30" x2="55" y2="5"
+                          stroke="@arc" stroke-width="1.1" opacity="@ao2"/>
+
+                    @* Sensor body *@
+                    <rect x="13" y="28" width="30" height="13" rx="4" fill="#1C2B33"/>
+                    <rect x="13" y="28" width="30" height="13" rx="4"
+                          fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="0.8"/>
+
+                    @* Fresnel-lens slots *@
+                    @foreach (var xPos in new[] { 17, 21, 25, 29, 33, 37 })
+                    {
+                        <line x1="@xPos" y1="29.5" x2="@xPos" y2="39.5"
+                              stroke="#263238" stroke-width="1"/>
+                    }
+
+                    @* Status LED *@
+                    @if (RexIsActive)
+                    {
+                        <circle cx="40" cy="34" r="3" fill="#ef4444" class="pir-pulse"/>
+                        <circle cx="40" cy="34" r="1.4" fill="#ffcdd2"/>
+                    }
+                    else
+                    {
+                        <circle cx="40" cy="34" r="2.5" fill="#263238"/>
+                        <circle cx="40" cy="34" r="1.1" fill="#37474F"/>
+                    }
+                </svg>
+
+                @*
+                <span class="rex-label">REX</span>
+                *@
+            </button>
+        }
+
+    </div>
+}
+
+@code {
+
+    [Parameter]
+    [EditorRequired]
+    public bool HasDps { get; set; }
+
+    [Parameter]
+    public bool HasRex { get; set; }
+
+    [Parameter]
+    public bool DoorIsOpen { get; set; }
+
+    [Parameter]
+    public bool RexIsActive { get; set; }
+
+    [Parameter]
+    public bool DpsNormallyOpen { get; set; }
+
+    [Parameter]
+    public bool RexNormallyOpen { get; set; }
+
+    [Parameter]
+    public bool Busy { get; set; }
+
+    [Parameter]
+    public EventCallback OnDoorToggle { get; set; }
+
+    [Parameter]
+    public EventCallback OnRexTrigger { get; set; }
+
+    private readonly string _uid = Guid.NewGuid().ToString("N")[..8];
+
+    private Task HandleDoorToggle()
+    {
+        return OnDoorToggle.HasDelegate
+            ? OnDoorToggle.InvokeAsync()
+            : Task.CompletedTask;
+    }
+
+    private Task HandleRexTrigger()
+    {
+        return OnRexTrigger.HasDelegate
+            ? OnRexTrigger.InvokeAsync()
+            : Task.CompletedTask;
+    }
+
+}

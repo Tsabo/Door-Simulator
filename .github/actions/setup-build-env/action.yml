@@ -1,0 +1,22 @@
+name: 'Set up .NET build environment'
+description: 'Sets up .NET from source/global.json, caches NuGet packages, and installs the wasm-tools workload'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        global-json-file: source/global.json
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v6
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('source/**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Install wasm-tools workload
+      shell: bash
+      run: dotnet workload install wasm-tools

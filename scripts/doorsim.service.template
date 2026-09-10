@@ -1,0 +1,32 @@
+[Unit]
+Description=DoorSim
+# udevd must be up before ExecStartPre can meaningfully wait on it.
+After=network-online.target systemd-udevd.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__DEPLOY_USER__
+Group=__DEPLOY_USER__
+WorkingDirectory=__INSTALL_PATH__
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
+Environment=DOTNET_ROOT=/home/__DEPLOY_USER__/.dotnet
+Environment=PATH=/home/__DEPLOY_USER__/.dotnet:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Wait for udev to create /dev/ttyRS485_* before the app opens ports by name.
+# See wait-for-rs485.sh for why. Kept in a script rather than inline because
+# systemd would expand $(...) and $1 in an ExecStartPre command line.
+# Leading "-" so a missing or failing gate script never blocks startup: the
+# app's own retry loop is the fallback, which is only noisy, not fatal.
+ExecStartPre=-/bin/sh __INSTALL_PATH__/wait-for-rs485.sh
+
+ExecStart=/home/__DEPLOY_USER__/.dotnet/dotnet __INSTALL_PATH__/DoorSim.dll
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGINT
+# ExecStartPre can legitimately consume up to ~60s (settle + poll).
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target

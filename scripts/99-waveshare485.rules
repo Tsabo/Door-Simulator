@@ -1,0 +1,163 @@
+################################################################################
+# Waveshare Industrial USB → Quad RS485 Adapter (Waveshare 4‑Channel RS485)
+#
+# PURPOSE:
+#   Provide stable, human‑friendly device names for each RS485 channel on each
+#   Waveshare adapter, regardless of ACM numbering, boot order, or USB re‑enumeration.
+#
+# WHY THIS FILE EXISTS:
+#   The Linux kernel assigns /dev/ttyACM* numbers based on enumeration order.
+#   With multiple multi‑interface USB serial devices, ACM numbers shift constantly.
+#   Each Waveshare unit exposes 4 RS485 ports via USB interfaces:
+#
+#       Interface 1.0 → RS485 Port 1
+#       Interface 1.2 → RS485 Port 2
+#       Interface 1.4 → RS485 Port 3
+#       Interface 1.6 → RS485 Port 4
+#
+#   These interface numbers NEVER change. They are the stable identifiers.
+#
+#   We match each RS485 port using:
+#       - The device's unique USB serial number (ATTRS{serial})
+#       - The stable USB path + interface number (ENV{ID_PATH})
+#
+#   This combination is guaranteed stable across reboots and hardware changes.
+#
+# DEVICE NUMBERING:
+#   Device numbers (1, 2, 3) are ours, not the hardware's. They map to physical
+#   Waveshare units by USB serial:
+#
+#       Device 1 → Serial BDFF70ABCD → USB path 1-1.4
+#       Device 2 → Serial BD651FABCD → USB path 1-1.3
+#       Device 3 → Serial BD63CCABCD → USB path 1-1.2
+#
+#   Deliberately no ttyACM numbers here: those shift every boot, which is the
+#   entire reason this file exists. Do not try to document them.
+#
+#   RS485 channel numbering is 1‑based to match the physical labels on the hardware.
+#
+# RESULTING SYMLINKS:
+#       /dev/ttyRS485_1_1 … ttyRS485_1_4   (Device 1, Ports 1–4)
+#       /dev/ttyRS485_2_1 … ttyRS485_2_4   (Device 2, Ports 1–4)
+#       /dev/ttyRS485_3_1 … ttyRS485_3_4   (Device 3, Ports 1–4)
+#
+# HOW TO DEBUG:
+#   Run:
+#       udevadm info -n /dev/ttyACM0 | grep ID_PATH
+#       udevadm info -n /dev/ttyACM0 | grep serial
+#
+#   If ID_PATH or serial changes, update the matching rules below.
+#
+# HOW TO APPLY CHANGES:
+#       sudo udevadm control --reload-rules
+#       sudo udevadm trigger --subsystem-match=tty
+#
+################################################################################
+
+
+###############################
+# Device 1 — Serial BDFF70ABCD
+# USB Path Prefix: usb-0:1.4
+###############################
+
+# RS485 Port 1 (Interface 1.0)
+SUBSYSTEM=="tty", ATTRS{serial}=="BDFF70ABCD", \
+  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.4:1.0", \
+  SYMLINK+="ttyRS485_1_1"
+
+# RS485 Port 2 (Interface 1.2)
+SUBSYSTEM=="tty", ATTRS{serial}=="BDFF70ABCD", \
+  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.4:1.2", \
+  SYMLINK+="ttyRS485_1_2"
+
+# RS485 Port 3 (Interface 1.4)
+SUBSYSTEM=="tty", ATTRS{serial}=="BDFF70ABCD", \
+  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.4:1.4", \
+  SYMLINK+="ttyRS485_1_3"
+# RS485 Port 4 (Interface 1.6)
+SUBSYSTEM=="tty", ATTRS{serial}=="BDFF70ABCD", \
+  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.4:1.6", \
+  SYMLINK+="ttyRS485_1_4"
+
+
+
+###############################
+# Device 2 — Serial BD651FABCD
+# USB Path Prefix: usb-0:1.3
+###############################
+
+# RS485 Port 1 (Interface 1.0)
+SUBSYSTEM=="tty", ATTRS{serial}=="BD651FABCD", \
+  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.3:1.0", \
+  SYMLINK+="ttyRS485_2_1"
+
+# RS485 Port 2 (Interface 1.2)
+SUBSYSTEM=="tty", ATTRS{serial}=="BD651FABCD", \
+  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.3:1.2", \
+  SYMLINK+="ttyRS485_2_2"
+  
+# RS485 Port 3 (Interface 1.4)
+SUBSYSTEM=="tty", ATTRS{serial}=="BD651FABCD", \
+  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.3:1.4", \
+  SYMLINK+="ttyRS485_2_3"
+
+# RS485 Port 4 (Interface 1.6)
+SUBSYSTEM=="tty", ATTRS{serial}=="BD651FABCD", \
+  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.3:1.6", \
+  SYMLINK+="ttyRS485_2_4"
+
+
+
+###############################
+# Device 3 — Serial BD63CCABCD
+# USB Path Prefix: usb-0:1.2
+# RS485 Ports: ACM8–ACM11
+###############################
+
+# RS485 Port 1 (Interface 1.0)
+SUBSYSTEM=="tty", ATTRS{serial}=="BD63CCABCD", \
+  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.2:1.0", \
+  SYMLINK+="ttyRS485_3_1"
+
+# RS485 Port 2 (Interface 1.2)
+SUBSYSTEM=="tty", ATTRS{serial}=="BD63CCABCD", \
+  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.2:1.2", \
+  SYMLINK+="ttyRS485_3_2"
+
+# RS485 Port 3 (Interface 1.4)
+SUBSYSTEM=="tty", ATTRS{serial}=="BD63CCABCD", \
+  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.2:1.4", \
+  SYMLINK+="ttyRS485_3_3"
+
+# RS485 Port 4 (Interface 1.6)
+SUBSYSTEM=="tty", ATTRS{serial}=="BD63CCABCD", \
+  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.2:1.6", \
+  SYMLINK+="ttyRS485_3_4"
+
+###############################
+# RETIRED — Serial BD6527ABCD (former Device 3, removed 2026-08-27)
+#
+# Kept only as a template for the block shape. If this unit is ever refitted,
+# re-verify its ID_PATH first: the path encodes which hub port it is plugged
+# into, so it is not portable between slots. See RS485_ADAPTERS.md.
+###############################
+#
+# RS485 Port 1 (Interface 1.0)
+#SUBSYSTEM=="tty", ATTRS{serial}=="BD6527ABCD", \
+#  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.2:1.0", \
+#  SYMLINK+="ttyRS485_3_1"
+#
+# RS485 Port 2 (Interface 1.2)
+#SUBSYSTEM=="tty", ATTRS{serial}=="BD6527ABCD", \
+#  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.2:1.2", \
+#  SYMLINK+="ttyRS485_3_2"
+#
+# RS485 Port 3 (Interface 1.4)
+#SUBSYSTEM=="tty", ATTRS{serial}=="BD6527ABCD", \
+#  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.2:1.4", \
+#  SYMLINK+="ttyRS485_3_3"
+#
+# RS485 Port 4 (Interface 1.6)
+#SUBSYSTEM=="tty", ATTRS{serial}=="BD6527ABCD", \
+#  ENV{ID_PATH}=="platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.2:1.6", \
+#  SYMLINK+="ttyRS485_3_4"

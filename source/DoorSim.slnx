@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="global.json" />
+    <File Path="nuget.config" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/DoorSim.Client/DoorSim.Client.csproj" />
+    <Project Path="src/DoorSim.Shared/DoorSim.Shared.csproj" />
+    <Project Path="src/DoorSim/DoorSim.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/DoorSim.Tests/DoorSim.Tests.csproj" />
+  </Folder>
+</Solution>

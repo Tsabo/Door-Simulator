@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "deploy-to-pi",
+      "type": "shell",
+      "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"${workspaceFolder}/scripts/deploy-to-pi.ps1\" -Mode Deploy -RemoteUser \"${input:piUser}\" -RemoteHost \"${input:piHost}\"",
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare-pi-debug",
+      "type": "shell",
+      "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"${workspaceFolder}/scripts/deploy-to-pi.ps1\" -Mode Debug -RemoteUser \"${input:piUser}\" -RemoteHost \"${input:piHost}\"",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "piUser",
+      "type": "promptString",
+      "description": "SSH username on the Raspberry Pi"
+    },
+    {
+      "id": "piHost",
+      "type": "promptString",
+      "description": "Raspberry Pi hostname or IP address"
+    }
+  ]
+}

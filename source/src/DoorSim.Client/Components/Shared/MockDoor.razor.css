@@ -1,0 +1,120 @@
+.mock-door-wrap {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* ── Door toggle button ──────────────────────────────────────── */
+
+.door-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    border-radius: 12px;
+    transition: opacity 0.15s, transform 0.1s;
+}
+
+.door-btn:hover:not(:disabled) {
+    opacity: 0.82;
+    transform: scale(1.03);
+}
+
+.door-btn:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+.door-btn:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.door-btn:focus-visible {
+    outline: 2px solid #7c4dff;
+    outline-offset: 4px;
+    border-radius: 12px;
+}
+
+.door-state-label {
+    font-family: system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    min-height: 15px;
+    text-align: center;
+}
+
+.label-open   { color: #ef4444; }
+.label-closed { color: #22c55e; }
+
+/* ── REX / PIR trigger button ────────────────────────────────── */
+
+.rex-btn {
+    background: #141e27;
+    border: 1.5px solid #263238;
+    border-radius: 9px;
+    padding: 5px 11px 4px;
+    cursor: pointer;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    min-width: 78px;
+}
+
+.rex-btn:hover:not(:disabled) {
+    background: #1e2f3d;
+    border-color: #546E7A;
+    transform: scale(1.04);
+}
+
+.rex-btn:active:not(:disabled) {
+    transform: scale(0.96);
+}
+
+.rex-btn:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.rex-btn:focus-visible {
+    outline: 2px solid #7c4dff;
+    outline-offset: 3px;
+}
+
+.rex-btn.rex-active {
+    background: #200e0e;
+    border-color: #ef4444;
+}
+
+.rex-label {
+    font-family: system-ui, sans-serif;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    color: #546E7A;
+    text-transform: uppercase;
+}
+
+.rex-btn.rex-active .rex-label {
+    color: #ef4444;
+}
+
+/* ── PIR LED pulse animation ─────────────────────────────────── */
+
+@keyframes pir-pulse {
+    0%, 100% { opacity: 1;   }
+    50%       { opacity: 0.2; }
+}
+
+.pir-pulse {
+    animation: pir-pulse 0.55s ease-in-out infinite;
+}

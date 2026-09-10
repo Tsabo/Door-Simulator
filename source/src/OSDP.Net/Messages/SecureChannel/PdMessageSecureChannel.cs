@@ -1,0 +1,300 @@
+﻿using System;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using OSDP.Net.Connections;
+using OSDP.Net.Model;
+using OSDP.Net.Model.CommandData;
+using OSDP.Net.Model.ReplyData;
+
+namespace OSDP.Net.Messages.SecureChannel
+{
+    /// <summary>
+    /// Message channel which represents the Periphery Device (PD) side of the OSDP 
+    /// communications (i.e., OSDP commands are received and replies are sent out)
+    /// </summary>
+    internal class PdMessageSecureChannelBase : MessageSecureChannel
+    {
+        /// <summary>
+        /// Initializes a new instance of the PDMessageChannel
+        /// </summary>
+        /// <param name="context">Optional security context state to be used by the channel. If one 
+        /// is not provided, a new default instance of the context will be created internally. This is
+        /// useful when more than one channel has a need to share the same security state (i.e., in
+        /// cases of implementing a spy that analyzes traffic flow through the two inbound and outbound
+        /// channels</param>
+        /// <param name="loggerFactory">Optional logger factory from which a logger object for the
+        /// message channel will be acquired</param>
+        public PdMessageSecureChannelBase(SecurityContext context = null, ILoggerFactory loggerFactory = null)
+            : base(context, loggerFactory) { }
+
+        /// <inheritdoc />
+        public override void EncodePayload(byte[] payload, Span<byte> destination) =>
+            EncodePayload(payload, Context.CMac, destination);
+
+        /// <inheritdoc />
+        public override byte[] DecodePayload(byte[] payload) => DecodePayload(payload, Context.RMac);
+
+        /// <inheritdoc />
+        public override ReadOnlySpan<byte> GenerateMac(ReadOnlySpan<byte> message, bool isIncoming) =>
+            isIncoming ? GenerateCommandMac(message) : GenerateReplyMac(message);
+    }
+
+    internal class PdMessageSecureChannel(
+        IOsdpConnection connection,
+        SecurityContext context = null,
+        ILoggerFactory loggerFactory = null)
+        : PdMessageSecureChannelBase(context, loggerFactory)
+    {
+        private byte[] _expectedServerCryptogram;
+        private byte[] _securityKey;
+        private readonly byte[] _clientUID;
+
+        public PdMessageSecureChannel(IOsdpConnection connection, byte[] securityKey, byte[] clientUID, ILoggerFactory loggerFactory = null)
+            : this(connection, context: null, loggerFactory)
+        {
+            _securityKey = securityKey;
+
+            if (clientUID == null)
+            {
+                throw new ArgumentNullException(nameof(clientUID));
+            }
+            if (clientUID.Length != 8)
+            {
+                throw new ArgumentException("Client UID must be exactly 8 bytes", nameof(clientUID));
+            }
+            _clientUID = clientUID;
+        }
+
+        public byte Address { get; set; }
+
+        public SecurityMode SecurityMode { get; set; } = SecurityMode.Unsecured;
+
+        public CommandType[] AllowUnsecured { get; set; } = [];
+
+        /// <summary>
+        /// How long to wait for the ACU to start a new poll/command before timing out a
+        /// read cycle. Should match the Device's configured ConnectionTimeout so a slow-polling
+        /// ACU doesn't trip a read timeout independently of the higher-level connection timeout.
+        /// </summary>
+        public TimeSpan ConnectionTimeout { get; set; } = TimeSpan.FromSeconds(8);
+
+        public async Task<IncomingMessage> ReadNextCommand(CancellationToken cancellationToken = default)
+        {
+            var commandBuffer = new Collection<byte>();
+
+            if (!await Bus.WaitForStartOfMessage(connection, commandBuffer, ConnectionTimeout, cancellationToken)
+                    .ConfigureAwait(false))
+            {
+                return null;
+            }
+
+            if (!await Bus.WaitForMessageLength(connection, commandBuffer, cancellationToken).ConfigureAwait(false))
+            {
+                throw new TimeoutException("Timeout waiting for command message length");
+            }
+
+            if (!await Bus.WaitForRestOfMessage(connection, commandBuffer, Bus.ExtractMessageLength(commandBuffer),
+                    cancellationToken).ConfigureAwait(false))
+            {
+                throw new TimeoutException("Timeout waiting for command of reply message");
+            }
+
+            var command = new IncomingMessage(commandBuffer.ToArray().AsSpan(), this);
+
+            if (command.Type != (byte)CommandType.Poll)
+            {
+                Logger?.LogInformation("Received Command: {CommandType}", Enum.GetName(typeof(CommandType), command.Type));
+                Logger?.LogDebug("Incoming: {Data}", BitConverter.ToString(commandBuffer.ToArray()));
+            }
+
+            var commandHandled = await HandleCommand(command);
+            return commandHandled ? await ReadNextCommand(cancellationToken) : command;
+        }
+
+        internal async Task SendReply(OutgoingReply reply, bool sendUnsecured = false)
+        {
+            if (reply.Command.Type == (byte)CommandType.KeySet && reply.Code == (byte)ReplyType.Ack)
+            {
+                HandleKeySetUpdate(reply);
+            }
+
+            var replyBuffer = reply.BuildMessage(sendUnsecured ? null : this);
+
+            if (reply.Command.Type != (byte)CommandType.Poll)
+            {
+                Logger?.LogInformation("Sending Reply: {Reply}", Enum.GetName(typeof(ReplyType), reply.PayloadData.Code));
+                Logger?.LogDebug("Outgoing: {Data}", BitConverter.ToString(replyBuffer));
+            }
+
+            await connection.WriteAsync(replyBuffer);
+        }
+
+        private async Task<bool> HandleCommand(IncomingMessage command)
+        {
+            if (command.Address != Address && command.Address != ControlPanel.ConfigurationAddress) return true;
+
+            DropStaleSecureSessionOnConnectionRestart(command);
+
+            var reply = (command.IsValidMac, (CommandType)command.Type) switch
+            {
+                (false, _) => HandleInvalidMac(),
+                (true, CommandType.SessionChallenge) => HandleSessionChallenge(command),
+                (true, CommandType.ServerCryptogram) => HandleSCrypt(command),
+                _ => ValidateCommandSecurity(command)
+            };
+
+            if (reply == null) return false;
+
+            // If we return NAK from here, it is generally because command didn't pass secure channel validation
+            // in this case we can only send the reply unsecured
+            await SendReply(new OutgoingReply(command, reply), reply.Code == (byte)ReplyType.Nak);
+
+            if (command.Type == (byte)CommandType.ServerCryptogram)
+            {
+                Context.IsSecurityEstablished = true;
+            }
+
+            return true;
+        }
+        /// <summary>
+        /// A clear-text command with sequence number 0 means the ACU is (re)starting the connection,
+        /// so any established secure channel session is stale and must be dropped. This lets the ACU
+        /// drive re-establishment (e.g. after osdp_KEYSET) - discovery commands like osdp_CAP are then
+        /// answered in the clear until the new secure channel is set up, rather than the PD resetting
+        /// the session off the back of the osdp_KEYSET itself.
+        /// </summary>
+        internal void DropStaleSecureSessionOnConnectionRestart(IncomingMessage command)
+        {
+            if (command.Sequence == 0 && !command.IsSecureMessage && IsSecurityEstablished)
+            {
+                ResetSecureChannelSession();
+            }
+        }
+
+        private PayloadData HandleInvalidMac()
+        {
+            return new Nak(ErrorCode.CommunicationSecurityNotMet);
+        }
+
+        /// <summary>
+        /// Default handler for the SessionChallenge message received on the channel
+        /// </summary>
+        /// <param name="command">Incoming command of type SessionChallenge</param>
+        /// <returns>A message representing a reply to the SessionChallenge</returns>
+        protected PayloadData HandleSessionChallenge(IncomingMessage command)
+        {
+            // Per Section D.1.3
+            bool useDefaultKey = command.SecureBlockData[0] == 0;
+            bool pdHasDefaultKey = _securityKey.SequenceEqual(SecurityContext.DefaultKey);
+
+            if (useDefaultKey && !pdHasDefaultKey)
+            {
+                // ACU requests SCBK-D, but PD has a non-default key configured
+                return new Nak(ErrorCode.DoesNotSupportSecurityBlock);
+            }
+
+            if (!useDefaultKey && pdHasDefaultKey)
+            {
+                // ACU requests a SCBK, but PD only has a default key configured
+                return new Nak(ErrorCode.DoesNotSupportSecurityBlock);
+            }
+
+            Context.Reset(_securityKey);
+
+            // generate a set of session keys: S-ENC, S-MAC1, S-MAC2 using command.Payload (which is RND.A)
+            using var crypto = Context.CreateCypher(true);
+            byte[] rndA = command.Payload;
+
+            // TODO: we should validate payload and SCB type
+
+            Context.Enc = SecurityContext.GenerateKey(crypto, [0x01, 0x82, rndA[0], rndA[1], rndA[2], rndA[3], rndA[4], rndA[5]
+            ]);
+            Context.SMac1 = SecurityContext.GenerateKey(crypto, [0x01, 0x01, rndA[0], rndA[1], rndA[2], rndA[3], rndA[4], rndA[5]
+            ]);
+            Context.SMac2 = SecurityContext.GenerateKey(crypto, [0x01, 0x02, rndA[0], rndA[1], rndA[2], rndA[3], rndA[4], rndA[5]
+            ]);
+
+            // Client UID is vendor code (3 bytes) + serial number (4 bytes) + padding (1 byte).
+            // See OSDP specification and GitHub issue #191.
+            byte[] cUID = _clientUID;
+            byte[] rndB = new byte[8];
+
+            new Random().NextBytes(rndB);
+            crypto.Key = Context.Enc;
+            var clientCryptogram = SecurityContext.GenerateKey(crypto, rndA, rndB);
+            _expectedServerCryptogram = SecurityContext.GenerateKey(crypto, rndB, rndA);
+
+            // reply with osdp_CCRYPT, returning PD's ID (cUID), its random number and the client cryptogram
+            return new ChallengeResponse(cUID, rndB, clientCryptogram, useDefaultKey);
+        }
+        
+        /// <summary>
+        /// Default handler to the SCrypt command received on the channel
+        /// </summary>
+        /// <param name="command">An incoming message representing SCrypt command</param>
+        /// <returns>Reply to the SCrypt command</returns>
+        protected PayloadData HandleSCrypt(IncomingMessage command)
+        {
+            var serverCryptogram = command.Payload;
+
+            if (command.SecurityBlockType != (byte)SecurityBlockType.SecureConnectionSequenceStep3)
+            {
+                Logger?.LogWarning("Received unexpected security block type: {SecurityBlockType}",
+                    command.SecurityBlockType);
+            }
+            else if (!serverCryptogram.SequenceEqual(_expectedServerCryptogram))
+            {
+                Logger?.LogWarning("Received unexpected server cryptogram!");
+            }
+            else if (IsSecurityEstablished)
+            {
+                Logger?.LogWarning("Secure channel already established. Why did we get another SCrypt??");
+            }
+            else
+            {
+                var crypto = Context.CreateCypher(true, Context.SMac1);
+                Context.RMac = SecurityContext.GenerateKey(crypto, serverCryptogram);
+                crypto.Key = Context.SMac2;
+                Context.RMac = SecurityContext.GenerateKey(crypto, Context.RMac);
+
+                return new InitialRMac(Context.RMac, true);
+            }
+
+            return new Nak(ErrorCode.DoesNotSupportSecurityBlock);
+        }
+
+        private PayloadData ValidateCommandSecurity(IncomingMessage command)
+        {
+            if (IsSecurityEstablished)
+            {
+                return command.IsSecureMessage ? null : new Nak(ErrorCode.CommunicationSecurityNotMet);
+            }
+            else if (SecurityMode != SecurityMode.FullSecurity)
+            {
+                return null;
+            }
+            else 
+            {
+                return AllowUnsecured.Contains((CommandType)command.Type) ?
+                    null : new Nak(ErrorCode.CommunicationSecurityNotMet);
+            }
+        }
+
+        private void HandleKeySetUpdate(OutgoingReply reply)
+        {
+            var keySetPayload = EncryptionKeyConfiguration.ParseData(reply.Command.Payload);
+
+            _securityKey = keySetPayload.KeyData;
+        }
+    }
+
+    internal enum SecurityMode
+    {
+        Unsecured,
+        InstallMode,
+        FullSecurity
+    }
+}

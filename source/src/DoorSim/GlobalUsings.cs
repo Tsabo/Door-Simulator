@@ -1,0 +1,11 @@
+global using System.Collections.Concurrent;
+global using System.Device.Gpio;
+global using System.Diagnostics;
+global using System.Numerics;
+global using System.Runtime.InteropServices;
+global using DoorSim.Data;
+global using DoorSim.Data.Entities;
+global using DoorSim.Hardware;
+global using DoorSim.Services;
+global using DoorSim.Shared.Models;
+global using Microsoft.EntityFrameworkCore;

@@ -1,0 +1,38 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Deploy & Debug on Pi",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "prepare-pi-debug",
+      "program": "/home/${input:piUser}/doorsim/DoorSim",
+      "args": [],
+      "cwd": "/home/${input:piUser}/doorsim",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ROOT": "/home/${input:piUser}/.dotnet",
+        "PATH": "/home/${input:piUser}/.dotnet:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      },
+      "pipeTransport": {
+        "pipeProgram": "ssh",
+        "pipeArgs": [ "-T", "${input:piUser}@${input:piHost}" ],
+        "debuggerPath": "/home/${input:piUser}/vsdbg/vsdbg",
+        "pipeCwd": "${workspaceFolder}"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "piUser",
+      "type": "promptString",
+      "description": "SSH username on the Raspberry Pi"
+    },
+    {
+      "id": "piHost",
+      "type": "promptString",
+      "description": "Raspberry Pi hostname or IP address"
+    }
+  ]
+}

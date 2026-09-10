@@ -1,0 +1,20 @@
+{
+  "profiles": {
+    "DoorSim": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:55915;http://localhost:55917"
+    },
+    "DoorSim-Pi": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "http://<pi-host>:5000"
+    }
+  }
+}

@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  generate-graph:
+    name: Generate NuGet Dependency Graph
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Generate graph
+        uses: Tsabo/nugraph-action@v4
+        with:
+          project-path: ./source/DoorSim.slnx
+          job-summary: 'true'
+          dotnet-version: '10.0.x'
+          hide-empty-graphs: 'true'
+          title: ''
+          ignore: |
+            Microsoft.*
+            System.*
+          extra-args: |
+            DoorSim.Client=--runtime browser-wasm
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Restore
+        working-directory: source
+        run: dotnet restore DoorSim.slnx
+
+      - name: Build
+        working-directory: source
+        run: dotnet build DoorSim.slnx -c Release --no-restore
+
+      - name: Test
+        working-directory: source
+        run: dotnet test --solution DoorSim.slnx -c Release --no-build
+
+  publish-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Publish for linux-arm64 (build check only, no deploy)
+        run: dotnet publish source/src/DoorSim -c Release -r linux-arm64 --no-self-contained

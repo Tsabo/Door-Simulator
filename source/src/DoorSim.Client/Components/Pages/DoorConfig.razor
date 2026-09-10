@@ -1,0 +1,543 @@
+@page "/doors"
+@inject DoorApiClient Doors
+
+<PageTitle>Door Config — DoorSim</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-6">Door Configuration</MudText>
+
+@if (_loading)
+{
+    <MudContainer Class="d-flex justify-center mt-16">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    </MudContainer>
+}
+else
+{
+    <MudGrid Spacing="3" Class="mb-6">
+        <MudItem xs="12" md="8">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            @(_editing is null ? "Add Door" : $"Edit: {_editing.Label}")
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+
+                <MudCardContent>
+                    <MudTextField @bind-Value="_form.Label"
+                                  Label="Label"
+                                  Placeholder="e.g. Main Entry"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Class="mb-4" />
+
+                    <MudSelect T="ProtocolType" @bind-Value="_form.Protocol"
+                               Label="Protocol"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Class="mb-4">
+                        @foreach (var proto in Enum.GetValues<ProtocolType>())
+                        {
+                            <MudSelectItem Value="@proto">@proto</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    @if (_form.Protocol == ProtocolType.Wiegand)
+                    {
+                        <MudNumericField T="int?" @bind-Value="_form.D0Pin"
+                                         Label="D0 Pin (BCM)"
+                                         Min="0"
+                                         Max="27"
+                                         Placeholder="e.g. 4"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudNumericField T="int?" @bind-Value="_form.D1Pin"
+                                         Label="D1 Pin (BCM)"
+                                         Min="0"
+                                         Max="27"
+                                         Placeholder="e.g. 27"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+                    }
+                    else
+                    {
+                        <MudNumericField T="byte?" @bind-Value="_form.OsdpAddress"
+                                         Label="OSDP Address (0–127)"
+                                         Min="0"
+                                         Max="127"
+                                         Placeholder="e.g. 0"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudSelect T="string" @bind-Value="_form.OsdpSerialPort"
+                                   Label="Serial Port"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            @foreach (var port in _availableSerialPorts)
+                            {
+                                <MudSelectItem Value="@port">@port</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudSelect T="int?" @bind-Value="_form.OsdpBaudRate"
+                                   Label="Baud Rate"
+                                   HelperText="Leave as default unless both the panel and the adapter channel support the chosen rate."
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            <MudSelectItem T="int?" Value="@((int?)null)">Default (@OsdpBaudRates.Default)</MudSelectItem>
+                            @foreach (var baud in OsdpBaudRates.Supported)
+                            {
+                                <MudSelectItem T="int?" Value="@((int?)baud)">@baud</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+
+                    <!-- Door Contact (DPS) Section -->
+                    <MudCheckBox T="bool" Value="@_form.HasDps"
+                                 ValueChanged="OnHasDpsChanged"
+                                 Label="Door Contact (DPS)"
+                                 Class="mb-4" />
+
+                    @if (_form.HasDps)
+                    {
+                        <MudPaper Class="pa-4 mb-4" Elevation="0" Style="background: #f5f5f5;">
+                            <MudText Typo="Typo.subtitle2" Class="mb-3">DPS Control</MudText>
+                            
+                            <MudRadioGroup T="bool" Value="@_form.DpsModeIsModbus"
+                                           ValueChanged="OnDpsModeChanged">
+                                <MudRadio T="bool" Value="false" Color="Color.Primary" Class="mb-2">
+                                    GPIO Pin
+                                </MudRadio>
+                                <MudRadio T="bool" Value="true" Color="Color.Primary">
+                                    Modbus Relay
+                                </MudRadio>
+                            </MudRadioGroup>
+
+                            @if (!_form.DpsModeIsModbus)
+                            {
+                                <MudNumericField T="int?" @bind-Value="_form.DpsPin"
+                                                 Label="DPS Pin (BCM)"
+                                                 Min="0"
+                                                 Max="27"
+                                                 Placeholder="e.g. 21"
+                                                 Variant="Variant.Outlined"
+                                                 Margin="Margin.Dense"
+                                                 Class="mt-4" />
+                            }
+                            else
+                            {
+                                <MudNumericField T="int?" @bind-Value="_form.DpsModbusChannel"
+                                                 Label="DPS Channel (0–15)"
+                                                 Min="0"
+                                                 Max="15"
+                                                 Placeholder="e.g. 0"
+                                                 Variant="Variant.Outlined"
+                                                 Margin="Margin.Dense"
+                                                 Class="mt-4" />
+                            }
+
+                            <MudSwitch T="bool" @bind-Value="_form.DpsNormallyOpen"
+                                       Color="Color.Warning"
+                                       Class="mt-3"
+                                       Label="@(_form.DpsNormallyOpen ? "Normally Open — Fail Safe" : "Normally Closed — Fail Secure")" />
+
+                        </MudPaper>
+                    }
+
+                    <!-- REX Relay Section -->
+                    <MudCheckBox T="bool" Value="@_form.HasRex"
+                                 ValueChanged="OnHasRexChanged"
+                                 Label="REX Relay"
+                                 Class="mb-4" />
+
+                    @if (_form.HasRex)
+                    {
+                        <MudPaper Class="pa-4 mb-4" Elevation="0" Style="background: #f5f5f5;">
+                            <MudText Typo="Typo.subtitle2" Class="mb-3">REX Control</MudText>
+                            
+                            <MudRadioGroup T="bool" Value="@_form.RexModeIsModbus"
+                                           ValueChanged="OnRexModeChanged">
+                                <MudRadio T="bool" Value="false" Color="Color.Primary" Class="mb-2">
+                                    GPIO Pin
+                                </MudRadio>
+                                <MudRadio T="bool" Value="true" Color="Color.Primary">
+                                    Modbus Relay
+                                </MudRadio>
+                            </MudRadioGroup>
+
+                            @if (!_form.RexModeIsModbus)
+                            {
+                                <MudNumericField T="int?" @bind-Value="_form.RexPin"
+                                                 Label="REX Pin (BCM)"
+                                                 Min="0"
+                                                 Max="27"
+                                                 Placeholder="e.g. 13"
+                                                 Variant="Variant.Outlined"
+                                                 Margin="Margin.Dense"
+                                                 Class="mt-4" />
+                            }
+                            else
+                            {
+                                <MudNumericField T="int?" @bind-Value="_form.RexModbusChannel"
+                                                 Label="REX Channel (0–15)"
+                                                 Min="0"
+                                                 Max="15"
+                                                 Placeholder="e.g. 1"
+                                                 Variant="Variant.Outlined"
+                                                 Margin="Margin.Dense"
+                                                 Class="mt-4" />
+                            }
+
+                            <MudSwitch T="bool" @bind-Value="_form.RexNormallyOpen"
+                                       Color="Color.Warning"
+                                       Class="mt-3"
+                                       Label="@(_form.RexNormallyOpen ? "Normally Open — Fail Safe" : "Normally Closed — Fail Secure")" />
+
+                        </MudPaper>
+                    }
+
+                    <!-- Modbus Relay Board Section -->
+                    @if (_form is { HasDps: true, DpsModeIsModbus: true } || _form is { HasRex: true, RexModeIsModbus: true })
+                    {
+                        <MudPaper Class="pa-4 mb-4" Elevation="0" Style="background: #fff3e0;">
+                            <MudText Typo="Typo.subtitle2" Class="mb-3">Modbus Relay Board</MudText>
+
+                            <MudRadioGroup T="bool" Value="@_form.ModbusTransportIsTcp"
+                                           ValueChanged="OnModbusTransportChanged"
+                                           Class="mb-4">
+                                <MudRadio T="bool" Value="false" Color="Color.Primary" Class="mb-2">
+                                    RTU (RS-485 serial)
+                                </MudRadio>
+                                <MudRadio T="bool" Value="true" Color="Color.Primary">
+                                    TCP (Ethernet)
+                                </MudRadio>
+                            </MudRadioGroup>
+
+                            @if (!_form.ModbusTransportIsTcp)
+                            {
+                                <MudSelect T="string" @bind-Value="_form.ModbusSerialPort"
+                                           Label="Serial Port"
+                                           Variant="Variant.Outlined"
+                                           Margin="Margin.Dense"
+                                           Class="mb-4">
+                                    @foreach (var port in _availableSerialPorts)
+                                    {
+                                        <MudSelectItem Value="@port">@port</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                <MudTextField @bind-Value="_form.ModbusTcpHost"
+                                              Label="Host / IP"
+                                              Placeholder="e.g. 192.168.1.100"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              Class="mb-4" />
+
+                                <MudNumericField T="int?" @bind-Value="_form.ModbusTcpPort"
+                                                 Label="Port (default 502)"
+                                                 Min="1"
+                                                 Max="65535"
+                                                 Placeholder="502"
+                                                 Variant="Variant.Outlined"
+                                                 Margin="Margin.Dense"
+                                                 Class="mb-4" />
+                            }
+
+                            <MudNumericField T="byte?" @bind-Value="_form.ModbusUnitId"
+                                             Label="Unit ID (1–247)"
+                                             Min="1"
+                                             Max="247"
+                                             Placeholder="e.g. 1"
+                                             Variant="Variant.Outlined"
+                                             Margin="Margin.Dense" />
+                        </MudPaper>
+                    }
+
+                    @if (_error is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">
+                            @_error
+                        </MudAlert>
+                    }
+                </MudCardContent>
+
+                <MudCardActions>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="SaveAsync"
+                               Disabled="@_saving">
+                        @(_saving ? "Saving…" : (_editing is null ? "Add" : "Save"))
+                    </MudButton>
+                    @if (_editing is not null)
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Default"
+                                   OnClick="CancelEditAsync">
+                            Cancel
+                        </MudButton>
+                    }
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <MudText Typo="Typo.h6" Class="mb-4">Doors</MudText>
+    <MudTable Items="_doors" Dense="true" Striped="true" Hover="true">
+        <HeaderContent>
+            <MudTh>Label</MudTh>
+            <MudTh>Protocol</MudTh>
+            <MudTh>D0</MudTh>
+            <MudTh>D1 / OSDP Addr</MudTh>
+            <MudTh>Baud</MudTh>
+            <MudTh>DPS</MudTh>
+            <MudTh>REX</MudTh>
+            <MudTh Style="text-align:center">Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Label">@context.Label</MudTd>
+            <MudTd DataLabel="Protocol">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">
+                    @context.Protocol
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="D0">@(context.D0Pin?.ToString() ?? "—")</MudTd>
+            <MudTd DataLabel="D1 / OSDP Addr">
+                @(context.Protocol == ProtocolType.Wiegand ? (context.D1Pin?.ToString() ?? "—") : (context.OsdpAddress?.ToString() ?? "—"))
+            </MudTd>
+            <MudTd DataLabel="Baud">@FormatBaud(context)</MudTd>
+            <MudTd DataLabel="DPS">@FormatContact(context.DpsPin, context.DpsModbusChannel)</MudTd>
+            <MudTd DataLabel="REX">@FormatContact(context.RexPin, context.RexModbusChannel)</MudTd>
+            <MudTd DataLabel="Actions" Style="text-align:center">
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Primary"
+                           Size="Size.Small"
+                           OnClick="() => BeginEditAsync(context)">
+                    Edit
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Error"
+                           Size="Size.Small"
+                           OnClick="() => DeleteAsync(context.Id)">
+                    Delete
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudTd colspan="8" Style="text-align:center; padding: 24px;">
+                <MudText Color="Color.Tertiary">No doors configured yet.</MudText>
+            </MudTd>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private DoorConfiguration[] _doors = [];
+    private string[] _availableSerialPorts = [];
+    private DoorFormModel _form = new();
+    private DoorConfiguration? _editing;
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _doors = await Doors.GetAllAsync();
+        await LoadAvailableSerialPortsAsync(_editing?.Id);
+        _loading = false;
+    }
+
+    private async Task BeginEditAsync(DoorConfiguration door)
+    {
+        _editing = door;
+        _form = new DoorFormModel
+        {
+            Label             = door.Label,
+            Protocol          = door.Protocol,
+            D0Pin             = door.D0Pin,
+            D1Pin             = door.D1Pin,
+            OsdpAddress       = door.OsdpAddress,
+            OsdpSerialPort    = door.OsdpSerialPort,
+            OsdpBaudRate      = door.OsdpBaudRate,
+            HasDps            = door.DpsPin.HasValue || door.DpsModbusChannel.HasValue,
+            DpsPin            = door.DpsPin,
+            DpsModeIsModbus   = door.DpsModbusChannel.HasValue,
+            DpsModbusChannel  = door.DpsModbusChannel,
+            DpsNormallyOpen   = door.DpsNormallyOpen,
+            HasRex            = door.RexPin.HasValue || door.RexModbusChannel.HasValue,
+            RexPin            = door.RexPin,
+            RexModeIsModbus   = door.RexModbusChannel.HasValue,
+            RexModbusChannel  = door.RexModbusChannel,
+            RexNormallyOpen   = door.RexNormallyOpen,
+            ModbusTransportIsTcp = door.ModbusTcpHost is not null,
+            ModbusSerialPort  = door.ModbusSerialPort,
+            ModbusTcpHost     = door.ModbusTcpHost,
+            ModbusTcpPort     = door.ModbusTcpPort,
+            ModbusUnitId      = door.ModbusUnitId,
+        };
+        _error = null;
+        await LoadAvailableSerialPortsAsync(_editing?.Id);
+    }
+
+    private async Task CancelEditAsync()
+    {
+        _editing = null;
+        _form = new();
+        _error = null;
+        await LoadAvailableSerialPortsAsync(null);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Label))
+        {
+            _error = "Label is required.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+
+        try
+        {
+            var anyModbus = _form is { HasDps: true, DpsModeIsModbus: true } or { HasRex: true, RexModeIsModbus: true };
+
+            var dto = new DoorConfiguration(
+                Id:                _editing?.Id ?? 0,
+                Label:             _form.Label.Trim(),
+                Protocol:          _form.Protocol,
+                D0Pin:             _form.Protocol == ProtocolType.Wiegand ? _form.D0Pin : null,
+                D1Pin:             _form.Protocol == ProtocolType.Wiegand ? _form.D1Pin : null,
+                OsdpAddress:       _form.Protocol == ProtocolType.Osdp    ? _form.OsdpAddress    : null,
+                OsdpSerialPort:    _form.Protocol == ProtocolType.Osdp    ? _form.OsdpSerialPort : null,
+                OsdpBaudRate:      _form.Protocol == ProtocolType.Osdp    ? _form.OsdpBaudRate   : null,
+                DpsPin:            _form is { HasDps: true, DpsModeIsModbus: false } ? _form.DpsPin : null,
+                RexPin:            _form is { HasRex: true, RexModeIsModbus: false } ? _form.RexPin : null,
+                DpsNormallyOpen:   _form.HasDps && _form.DpsNormallyOpen,
+                RexNormallyOpen:   _form.HasRex && _form.RexNormallyOpen,
+                ModbusSerialPort:  anyModbus && !_form.ModbusTransportIsTcp ? _form.ModbusSerialPort : null,
+                ModbusUnitId:      anyModbus ? _form.ModbusUnitId : null,
+                DpsModbusChannel:  _form is { HasDps: true, DpsModeIsModbus: true } ? _form.DpsModbusChannel : null,
+                RexModbusChannel:  _form is { HasRex: true, RexModeIsModbus: true } ? _form.RexModbusChannel : null,
+                ModbusTcpHost:     anyModbus && _form.ModbusTransportIsTcp ? _form.ModbusTcpHost : null,
+                ModbusTcpPort:     anyModbus && _form.ModbusTransportIsTcp ? _form.ModbusTcpPort : null);
+
+            if (_editing is null)
+            {
+                var (result, error) = await Doors.CreateAsync(dto);
+                if (error is not null) { _error = error; return; }
+            }
+            else
+            {
+                var (result, error) = await Doors.UpdateAsync(_editing.Id, dto);
+                if (error is not null) { _error = error; return; }
+            }
+
+            _editing = null;
+            _form = new();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        await Doors.DeleteAsync(id);
+        await LoadAsync();
+    }
+
+    private async Task LoadAvailableSerialPortsAsync(int? excludeDoorId)
+    {
+        _availableSerialPorts = await Doors.GetAvailableSerialPortsAsync(excludeDoorId);
+    }
+
+    private Task OnHasDpsChanged(bool value)
+    {
+        _form.HasDps = value;
+        return Task.CompletedTask;
+    }
+
+    private Task OnDpsModeChanged(bool value)
+    {
+        _form.DpsModeIsModbus = value;
+        return Task.CompletedTask;
+    }
+
+    private Task OnHasRexChanged(bool value)
+    {
+        _form.HasRex = value;
+        return Task.CompletedTask;
+    }
+
+    private Task OnRexModeChanged(bool value)
+    {
+        _form.RexModeIsModbus = value;
+        return Task.CompletedTask;
+    }
+
+    private Task OnModbusTransportChanged(bool isTcp)
+    {
+        _form.ModbusTransportIsTcp = isTcp;
+        return Task.CompletedTask;
+    }
+
+    private sealed class DoorFormModel
+    {
+        public string Label { get; set; } = string.Empty;
+        public ProtocolType Protocol { get; set; } = ProtocolType.Wiegand;
+        public int? D0Pin { get; set; }
+        public int? D1Pin { get; set; }
+        public byte? OsdpAddress { get; set; }
+        public string? OsdpSerialPort { get; set; }
+        public int? OsdpBaudRate { get; set; }
+        public bool HasDps { get; set; }
+        public int? DpsPin { get; set; }
+        public bool DpsModeIsModbus { get; set; }
+        public int? DpsModbusChannel { get; set; }
+        public bool DpsNormallyOpen { get; set; }
+        public bool HasRex { get; set; }
+        public int? RexPin { get; set; }
+        public bool RexModeIsModbus { get; set; }
+        public int? RexModbusChannel { get; set; }
+        public bool RexNormallyOpen { get; set; }
+        public bool ModbusTransportIsTcp { get; set; }
+        public string? ModbusSerialPort { get; set; }
+        public string? ModbusTcpHost { get; set; }
+        public int? ModbusTcpPort { get; set; }
+        public byte? ModbusUnitId { get; set; }
+    }
+
+    // "*" marks a door running a non-default rate, so overrides are visible at a glance.
+    private static string FormatBaud(DoorConfiguration door)
+    {
+        if (door.Protocol != ProtocolType.Osdp) return "—";
+        return door.OsdpBaudRate is null
+            ? OsdpBaudRates.Default.ToString()
+            : $"{door.OsdpBaudRate} *";
+    }
+
+    private static string FormatContact(int? gpioPin, int? modbusChannel)
+    {
+        if (modbusChannel.HasValue) return $"MB:ch{modbusChannel}";
+        if (gpioPin.HasValue) return $"GPIO:{gpioPin}";
+        return "—";
+    }
+}
