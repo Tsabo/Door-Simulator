@@ -309,6 +309,15 @@ dotnet_diagnostic.IDE0073.severity = suggestion
 # Missing XML comment (can be warning for library projects)
 dotnet_diagnostic.CS1591.severity = none
 
+# Vendored, unmodified copy of upstream OSDP.Net (see src/OSDP.Net/NOTICE.md).
+# These findings are pre-existing in the upstream project outside the files
+# we've documented as patched; hand-editing unmodified upstream files to
+# satisfy our local analyzer rules would create needless divergence and
+# complicate merging future upstream releases forward.
+[src/OSDP.Net/**.cs]
+dotnet_diagnostic.CA2000.severity = none
+dotnet_diagnostic.CA2201.severity = none
+
 #### Naming Conventions ####
 
 [*.{cs,vb}]

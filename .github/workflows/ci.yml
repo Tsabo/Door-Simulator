@@ -34,7 +34,7 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up build environment
         uses: ./.github/actions/setup-build-env
@@ -54,7 +54,7 @@ jobs:
   publish-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up build environment
         uses: ./.github/actions/setup-build-env
