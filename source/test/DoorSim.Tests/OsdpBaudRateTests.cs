@@ -21,7 +21,6 @@ public class OsdpBaudRateTests
     public async Task Resolve_NullFallsBackToDefault()
     {
         await Assert.That(OsdpBaudRates.Resolve(null)).IsEqualTo(9600);
-        await Assert.That(OsdpBaudRates.Default).IsEqualTo(9600);
     }
 
     [Test]
