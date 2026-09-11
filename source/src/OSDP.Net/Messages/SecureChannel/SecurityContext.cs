@@ -158,6 +158,11 @@ public class SecurityContext
         }
         else
         {
+            // codeql[cs/ecb-encryption]: OSDP secure channel key derivation (IEC 60839-11-5).
+            // Every caller (GenerateKey) encrypts exactly one 16-byte block via
+            // TransformFinalBlock as a KDF/PRF, never multi-block plaintext, so ECB's
+            // repeating-ciphertext weakness does not apply. Changing this mode would
+            // break interop with real OSDP panels/PDs. See NOTICE.md.
             crypto.Mode = CipherMode.ECB;
             crypto.Padding = PaddingMode.Zeros;
         }

@@ -23,3 +23,12 @@ this directory).
 
 This is not an official Z-bit Systems LLC release. Bug reports specific to
 these modifications should go to the DoorSim project, not upstream.
+
+## Known CodeQL findings (suppressed, not bugs)
+
+- `Messages/SecureChannel/SecurityContext.cs` — `cs/ecb-encryption` on the
+  AES `CipherMode.ECB` setup for session-setup key derivation. Single-block
+  KDF operation per the OSDP secure channel spec, not multi-block plaintext
+  encryption; ECB's replay weakness doesn't apply. Suppressed inline via a
+  `codeql[cs/ecb-encryption]` comment. Do not "fix" by changing the mode —
+  it will break interop with real panels.
