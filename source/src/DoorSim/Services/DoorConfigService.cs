@@ -115,9 +115,7 @@ public class DoorConfigService(DoorSimDbContext db)
     };
 
     private static string? Sanitize(string? value) =>
-        value is null
-            ? null
-            : new string(value.Where(p => !char.IsControl(p)).ToArray());
+        value?.Replace("\r", "").Replace("\n", "");
 
     private async Task<string?> ValidateAsync(DoorConfiguration dto, int? excludeId)
     {
