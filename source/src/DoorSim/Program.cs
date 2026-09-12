@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using DoorSim.Endpoints;
 using DoorSim.OpenApi;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 using Serilog;
@@ -89,6 +90,17 @@ builder.Services.AddOpenApi(options =>
     options.AddSchemaTransformer<EnumDescriptionSchemaTransformer>();
 });
 
+// Honor forwarded headers from reverse proxies / Cloudflare Tunnel (X-Forwarded-Proto, X-Forwarded-Host)
+// so generated URLs in OpenAPI / Scalar schema use HTTPS when hosted behind an SSL-terminating tunnel.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor
+                             | ForwardedHeaders.XForwardedProto
+                             | ForwardedHeaders.XForwardedHost;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 // -------------------------------------------------------------------------
 // Build
 // -------------------------------------------------------------------------
@@ -113,6 +125,7 @@ await app.Services.GetRequiredService<DynamicSimulatorBank>().LoadFromDbAsync();
 // Middleware
 // -------------------------------------------------------------------------
 
+app.UseForwardedHeaders();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 app.UseRouting();
