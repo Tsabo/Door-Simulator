@@ -19,6 +19,12 @@ public class SimulationApiClient(HttpClient http)
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task SendBitsAsync(RawBitsRequest request)
+    {
+        var response = await http.PostAsJsonAsync("/api/simulate/send-bits", request, DoorSimJson.Options);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task RunRawEventAsync(RawDoorEventRequest request)
     {
         var response = await http.PostAsJsonAsync("/api/simulate/raw-event", request, DoorSimJson.Options);
@@ -111,7 +117,8 @@ public class SimulationApiClient(HttpClient http)
         request.SetBrowserResponseStreamingEnabled(true);
 
         using var response = await http.SendAsync(
-            request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                request, HttpCompletionOption.ResponseHeadersRead, ct)
+            .ConfigureAwait(false);
 
         response.EnsureSuccessStatusCode();
 

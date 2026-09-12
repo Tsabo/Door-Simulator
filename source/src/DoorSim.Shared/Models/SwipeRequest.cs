@@ -8,3 +8,8 @@ public record RawCardRequest(
     uint CardNumber,
     ushort FacilityCode,
     WiegandFormat Format);
+
+/// <summary>Raw bit-stream card send — transmits literal bits without format calculation.</summary>
+public record RawBitsRequest(
+    int ReaderId,
+    string Bits);

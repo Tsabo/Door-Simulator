@@ -66,6 +66,30 @@ public static class SimulationEndpoints
             .Produces<string>(StatusCodes.Status400BadRequest)
             .Produces<string>(StatusCodes.Status404NotFound);
 
+        // Raw bit-stream send (no library entry or format calculation needed)
+        group.MapPost("/send-bits", async (RawBitsRequest request, SimulationOrchestrator orchestrator, IReaderBank bank) =>
+            {
+                var validationError = SimulationValidation.Validate(request);
+                if (validationError is not null)
+                    return Results.BadRequest(validationError);
+
+                if (!bank.ContainsReader(request.ReaderId))
+                    return Results.NotFound($"Reader {request.ReaderId} not found in the active bank.");
+
+                await orchestrator.SendBitsAsync(request);
+
+                return Results.Ok();
+            })
+            .WithName("SendRawBits")
+            .WithSummary("Send a raw bit-stream card read — literal bits without format calculation or parity wrapping.")
+            .WithDescription(
+                "Transmits an arbitrary binary bit string (e.g. \"10000000000010100011100100\") to the reader " +
+                "without requiring facility code, card number, or standard format rules. For Wiegand, bits are pulsed " +
+                "across D0/D1 in left-to-right order. For OSDP, bits are queued as an osdp_RAW reply.")
+            .Produces(StatusCodes.Status200OK)
+            .Produces<string>(StatusCodes.Status400BadRequest)
+            .Produces<string>(StatusCodes.Status404NotFound);
+
         group.MapPost("/raw-event", async (RawDoorEventRequest request, SimulationOrchestrator orchestrator, IReaderBank bank) =>
             {
                 var validationError = SimulationValidation.Validate(request);

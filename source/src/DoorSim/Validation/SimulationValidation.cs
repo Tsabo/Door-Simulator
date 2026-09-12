@@ -52,4 +52,27 @@ public static class SimulationValidation
 
         return null;
     }
+
+    /// <summary>
+    /// Validates a <see cref="RawBitsRequest" />.
+    /// </summary>
+    public static string? Validate(RawBitsRequest request)
+    {
+        if (request.ReaderId <= 0)
+            return "ReaderId must be greater than zero.";
+
+        if (string.IsNullOrWhiteSpace(request.Bits))
+            return "Bits cannot be empty.";
+
+        if (request.Bits.Length > 1024)
+            return "Bits cannot exceed 1024 characters.";
+
+        foreach (var c in request.Bits)
+        {
+            if (c is not ('0' or '1'))
+                return "Bits must contain only '0' and '1' characters.";
+        }
+
+        return null;
+    }
 }

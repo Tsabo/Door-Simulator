@@ -24,14 +24,36 @@ internal sealed class WiegandTransmitter(GpioController? gpio, int d0Pin, int d1
     {
         var (frame, bitCount) = format switch
         {
-            WiegandFormat.Wiegand26        => (BuildWiegand26(facilityCode, (ushort)cardNumber), 26),
-            WiegandFormat.Wiegand34        => (BuildWiegand34(facilityCode, cardNumber), 34),
-            WiegandFormat.Wiegand37        => (BuildWiegand37(cardNumber), 37),
+            WiegandFormat.Wiegand26 => (BuildWiegand26(facilityCode, (ushort)cardNumber), 26),
+            WiegandFormat.Wiegand34 => (BuildWiegand34(facilityCode, cardNumber), 34),
+            WiegandFormat.Wiegand37 => (BuildWiegand37(cardNumber), 37),
             WiegandFormat.HidCorporate1000 => (BuildHidCorporate1000(facilityCode, cardNumber), 35),
-            _ => throw new ArgumentOutOfRangeException(nameof(format))
+            var _ => throw new ArgumentOutOfRangeException(nameof(format)),
         };
 
         TransmitBits(frame, bitCount);
+    }
+
+    /// <summary>Transmit an arbitrary bit-stream (e.g. "10000000000010100011100100000000").</summary>
+    public void Send(string bits)
+    {
+        if (gpio is null)
+            return; // Non-Linux dev environment — skip GPIO
+
+        for (var i = 0; i < bits.Length; i++)
+        {
+            var pin = bits[i] == '0'
+                ? d0Pin
+                : d1Pin;
+
+            gpio.Write(pin, PinValue.Low);
+            SpinDelayMicroseconds(PulseUs);
+            gpio.Write(pin, PinValue.High);
+            SpinDelayMicroseconds(BitGapUs);
+        }
+
+        // Inter-message gap (minus the BitGap already elapsed after the last bit)
+        SpinDelayMicroseconds(MessageGapUs - BitGapUs);
     }
 
     // -------------------------------------------------------------------------
@@ -125,10 +147,7 @@ internal sealed class WiegandTransmitter(GpioController? gpio, int d0Pin, int d1
     ///   pos 34 → bit 0  (LSB-0): trailing 0
     /// FC is 12-bit (0–4095); CN is 20-bit (0–1 048 575).
     /// </summary>
-    internal static ulong BuildHidCorporate1000(ushort fc, uint cn)
-    {
-        return (ulong)(fc & 0xFFF) << 21 | (ulong)(cn & 0xFFFFF) << 1;
-    }
+    internal static ulong BuildHidCorporate1000(ushort fc, uint cn) => (ulong)(fc & 0xFFF) << 21 | (ulong)(cn & 0xFFFFF) << 1;
 
     // -------------------------------------------------------------------------
     // Transmission

@@ -28,6 +28,9 @@ public interface IReaderSimulator
     /// <summary>Transmit a credential from raw values — no library entry required.</summary>
     Task SendCardAsync(uint cardNumber, ushort facilityCode, WiegandFormat format);
 
+    /// <summary>Transmit an arbitrary raw bit-stream — no format calculation.</summary>
+    Task SendBitsAsync(string bits);
+
     /// <summary>Full access cycle: card read → door opens → door closes.</summary>
     Task SimulateAccessCycleAsync(CardEntry card, int cardToDoorDelayMs, int doorOpenMs);
 

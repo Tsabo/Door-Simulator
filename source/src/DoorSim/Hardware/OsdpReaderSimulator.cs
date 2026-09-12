@@ -7,10 +7,10 @@ using OSDP.Net.Model.ReplyData;
 namespace DoorSim.Hardware;
 
 /// <summary>
-/// OSDP RS-485 implementation of <see cref="IReaderSimulator"/>.
-/// Uses <see cref="Device"/> from OSDP.Net to act as a Peripheral Device (PD) on the RS-485 bus.
+/// OSDP RS-485 implementation of <see cref="IReaderSimulator" />.
+/// Uses <see cref="Device" /> from OSDP.Net to act as a Peripheral Device (PD) on the RS-485 bus.
 /// Card reads are delivered via EnqueuePollReply; DPS and REX contacts are managed by
-/// <see cref="DoorContactController"/> (GPIO or Modbus relay).
+/// <see cref="DoorContactController" /> (GPIO or Modbus relay).
 /// </summary>
 public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
 {
@@ -26,31 +26,33 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
     // connection every cycle — confirmed via direct instrumentation, root cause of the
     // "readers keep showing disconnected" issue, not the ConnectionTimeout above.
     private static readonly TimeSpan _replyTimeout = TimeSpan.FromSeconds(2);
+    private readonly int _baudRate;
 
     private readonly DoorConfiguration _config;
-    private readonly int _baudRate;
-    private readonly ILogger<OsdpReaderSimulator> _logger;
     private readonly DoorContactController _contacts;
 
     // null when no serial port is configured (PIN-only DPS/REX mode)
     private readonly Device? _device;
+    private readonly ILogger<OsdpReaderSimulator> _logger;
+
+    private volatile bool _isDoorOpen;
+    private volatile bool _isRexActive;
     private SerialPortConnectionListener? _listener;
 
     /// <summary>
     /// Constructs an OSDP reader simulator.
-    /// If <see cref="DoorConfiguration.OsdpSerialPort"/> is set the OSDP.Net Device is
+    /// If <see cref="DoorConfiguration.OsdpSerialPort" /> is set the OSDP.Net Device is
     /// started immediately as a background task; otherwise card sends are no-ops.
     /// </summary>
-    public OsdpReaderSimulator(
-        DoorConfiguration config,
+    public OsdpReaderSimulator(DoorConfiguration config,
         GpioController? gpio,
         ModbusRelayService? modbus,
         ModbusTcpRelayService? modbusTcp,
         ILoggerFactory loggerFactory)
     {
-        _config   = config;
+        _config = config;
         _baudRate = OsdpBaudRates.Resolve(config.OsdpBaudRate);
-        _logger   = loggerFactory.CreateLogger<OsdpReaderSimulator>();
+        _logger = loggerFactory.CreateLogger<OsdpReaderSimulator>();
         _contacts = new DoorContactController(config, gpio, modbus, modbusTcp, _logger);
 
         if (config.OsdpSerialPort is not null)
@@ -58,14 +60,16 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
             var deviceConfig = new DeviceConfiguration(
                 new ClientIdentification([0x00, 0x00, 0x01], (uint)config.Id))
             {
-                Address          = config.OsdpAddress ?? 0,
-                RequireSecurity  = false,
+                Address = config.OsdpAddress ?? 0,
+                RequireSecurity = false,
                 ConnectionTimeout = _connectionTimeout,
             };
+
             _device = new LoggingDevice(deviceConfig, loggerFactory, config.Id, config.Label,
-                baudRate:     _baudRate,
-                getDoorOpen:  () => _isDoorOpen,
-                getRexActive: () => _isRexActive);
+                _baudRate,
+                () => _isDoorOpen,
+                () => _isRexActive);
+
             _ = StartListeningAsync(config.OsdpSerialPort, loggerFactory);
         }
         else
@@ -76,55 +80,50 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         }
     }
 
+    public async ValueTask DisposeAsync()
+    {
+        _contacts.Dispose();
+
+        if (_device is not null)
+        {
+            try
+            {
+                await _device.StopListening();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Door {Id}: error stopping OSDP listener", _config.Id);
+            }
+        }
+
+        _listener?.Dispose();
+    }
+
     // -------------------------------------------------------------------------
     // Connectivity
     // -------------------------------------------------------------------------
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public bool IsConnected => _device?.IsConnected ?? false;
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public ReaderLedState? LedState => (_device as LoggingDevice)?.CurrentLedState;
 
-    private volatile bool _isDoorOpen;
-    private volatile bool _isRexActive;
+    /// <inheritdoc />
+    public bool IsDoorOpen => _isDoorOpen;
 
-    /// <inheritdoc/>
-    public bool IsDoorOpen  => _isDoorOpen;
-
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public bool IsRexActive => _isRexActive;
-
-    private async Task StartListeningAsync(string serialPort, ILoggerFactory loggerFactory)
-    {
-        try
-        {
-            _listener = new SerialPortConnectionListener(serialPort, _baudRate, loggerFactory)
-            {
-                ReplyTimeout = _replyTimeout,
-            };
-            _logger.LogInformation(
-                "Door {Id} ({Label}): starting OSDP listener on {Port} at {Baud} baud",
-                _config.Id, _config.Label, serialPort, _baudRate);
-            await _device!.StartListening(_listener).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Door {Id} ({Label}): OSDP listener failed on {Port}",
-                _config.Id, _config.Label, serialPort);
-        }
-    }
 
     // -------------------------------------------------------------------------
     // Card read
     // -------------------------------------------------------------------------
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public Task SendCardAsync(CardEntry card) =>
         SendCardAsync(card.CardNumber, card.FacilityCode, card.Format);
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public Task SendCardAsync(uint cardNumber, ushort facilityCode, WiegandFormat format)
     {
         if (_device is null)
@@ -132,6 +131,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
             _logger.LogWarning(
                 "Door {Id} ({Label}): no serial port — card send skipped.",
                 _config.Id, _config.Label);
+
             return Task.CompletedTask;
         }
 
@@ -140,6 +140,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
             _logger.LogWarning(
                 "Door {Id} ({Label}): OSDP not connected — card send skipped.",
                 _config.Id, _config.Label);
+
             return Task.CompletedTask;
         }
 
@@ -154,63 +155,73 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    private static (ulong frame, int bitCount) BuildFrame(
-        uint cardNumber, ushort facilityCode, WiegandFormat format) =>
-        format switch
-        {
-            WiegandFormat.Wiegand26        => (WiegandTransmitter.BuildWiegand26(facilityCode, (ushort)cardNumber), 26),
-            WiegandFormat.Wiegand34        => (WiegandTransmitter.BuildWiegand34(facilityCode, cardNumber), 34),
-            WiegandFormat.Wiegand37        => (WiegandTransmitter.BuildWiegand37(cardNumber), 37),
-            WiegandFormat.HidCorporate1000 => (WiegandTransmitter.BuildHidCorporate1000(facilityCode, cardNumber), 35),
-            _ => throw new ArgumentOutOfRangeException(nameof(format), format, null)
-        };
-
-    /// <summary>
-    /// Converts a WiegandTransmitter ulong frame (MSB at bit <paramref name="bitCount"/>-1)
-    /// to a <see cref="BitArray"/> where index 0 is the most-significant bit.
-    /// This matches the osdp_RAW wire order expected by RawCardData.BuildData().
-    /// </summary>
-    private static BitArray FrameToBitArray(ulong frame, int bitCount)
+    /// <inheritdoc />
+    public Task SendBitsAsync(string bits)
     {
-        var bits = new BitArray(bitCount);
-        for (var i = 0; i < bitCount; i++)
-            bits[i] = ((frame >> (bitCount - 1 - i)) & 1) == 1;
-        return bits;
+        if (_device is null)
+        {
+            _logger.LogWarning(
+                "Door {Id} ({Label}): no serial port — bits send skipped.",
+                _config.Id, _config.Label);
+
+            return Task.CompletedTask;
+        }
+
+        if (!_device.IsConnected)
+        {
+            _logger.LogWarning(
+                "Door {Id} ({Label}): OSDP not connected — bits send skipped.",
+                _config.Id, _config.Label);
+
+            return Task.CompletedTask;
+        }
+
+        var cardData = new RawCardData(0, FormatCode.Wiegand, StringToBitArray(bits));
+        _device.EnqueuePollReply(cardData);
+
+        _logger.LogInformation(
+            "Door {Id} ({Label}): queued osdp_RAW ({Bits} bits) — {Data}",
+            _config.Id, _config.Label, bits.Length, cardData);
+
+        return Task.CompletedTask;
     }
 
     // -------------------------------------------------------------------------
     // Door lifecycle
     // -------------------------------------------------------------------------
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public async Task SimulateAccessCycleAsync(CardEntry card, int cardToDoorDelayMs, int doorOpenMs)
     {
         await SendCardAsync(card).ConfigureAwait(false);
         if (cardToDoorDelayMs > 0)
             await Task.Delay(cardToDoorDelayMs).ConfigureAwait(false);
+
         await OpenDoorAsync().ConfigureAwait(false);
         await Task.Delay(doorOpenMs).ConfigureAwait(false);
         await CloseDoorAsync().ConfigureAwait(false);
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public async Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, WiegandFormat format, int cardToDoorDelayMs, int doorOpenMs)
     {
         await SendCardAsync(cardNumber, facilityCode, format).ConfigureAwait(false);
         if (cardToDoorDelayMs > 0)
             await Task.Delay(cardToDoorDelayMs).ConfigureAwait(false);
+
         await OpenDoorAsync().ConfigureAwait(false);
         await Task.Delay(doorOpenMs).ConfigureAwait(false);
         await CloseDoorAsync().ConfigureAwait(false);
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public async Task SimulateEgressCycleAsync(int rexLeadMs, int doorOpenMs)
     {
         await TripRexAsync().ConfigureAwait(false);
         if (rexLeadMs > 0)
             await Task.Delay(rexLeadMs).ConfigureAwait(false);
-        await OpenDoorAsync().ConfigureAwait(false) ;
+
+        await OpenDoorAsync().ConfigureAwait(false);
         await Task.Delay(doorOpenMs).ConfigureAwait(false);
         await CloseDoorAsync().ConfigureAwait(false);
         await ResetRexAsync().ConfigureAwait(false);
@@ -220,7 +231,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
     // Primitives
     // -------------------------------------------------------------------------
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public async Task OpenDoorAsync()
     {
         _logger.LogDebug("Door {Id}: door open", _config.Id);
@@ -228,7 +239,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         _isDoorOpen = true;
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public async Task CloseDoorAsync()
     {
         _logger.LogDebug("Door {Id}: door close", _config.Id);
@@ -236,7 +247,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         _isDoorOpen = false;
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public async Task TripRexAsync()
     {
         _logger.LogDebug("Door {Id}: REX trip", _config.Id);
@@ -244,7 +255,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         _isRexActive = true;
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public async Task ResetRexAsync()
     {
         _logger.LogDebug("Door {Id}: REX reset", _config.Id);
@@ -252,22 +263,59 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         _isRexActive = false;
     }
 
-    public async ValueTask DisposeAsync()
+    private async Task StartListeningAsync(string serialPort, ILoggerFactory loggerFactory)
     {
-        _contacts.Dispose();
-
-        if (_device is not null)
+        try
         {
-            try 
-            { 
-                await _device.StopListening(); 
-            }
-            catch (Exception ex)
+            _listener = new SerialPortConnectionListener(serialPort, _baudRate, loggerFactory)
             {
-                _logger.LogWarning(ex, "Door {Id}: error stopping OSDP listener", _config.Id);
-            }
-        }
+                ReplyTimeout = _replyTimeout,
+            };
 
-        _listener?.Dispose();
+            _logger.LogInformation(
+                "Door {Id} ({Label}): starting OSDP listener on {Port} at {Baud} baud",
+                _config.Id, _config.Label, serialPort, _baudRate);
+
+            await _device!.StartListening(_listener).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Door {Id} ({Label}): OSDP listener failed on {Port}",
+                _config.Id, _config.Label, serialPort);
+        }
+    }
+
+    private static (ulong frame, int bitCount) BuildFrame(uint cardNumber, ushort facilityCode, WiegandFormat format) =>
+        format switch
+        {
+            WiegandFormat.Wiegand26 => (WiegandTransmitter.BuildWiegand26(facilityCode, (ushort)cardNumber), 26),
+            WiegandFormat.Wiegand34 => (WiegandTransmitter.BuildWiegand34(facilityCode, cardNumber), 34),
+            WiegandFormat.Wiegand37 => (WiegandTransmitter.BuildWiegand37(cardNumber), 37),
+            WiegandFormat.HidCorporate1000 => (WiegandTransmitter.BuildHidCorporate1000(facilityCode, cardNumber), 35),
+            var _ => throw new ArgumentOutOfRangeException(nameof(format), format, null),
+        };
+
+    /// <summary>
+    /// Converts a WiegandTransmitter ulong frame (MSB at bit <paramref name="bitCount" />-1)
+    /// to a <see cref="BitArray" /> where index 0 is the most-significant bit.
+    /// This matches the osdp_RAW wire order expected by RawCardData.BuildData().
+    /// </summary>
+    private static BitArray FrameToBitArray(ulong frame, int bitCount)
+    {
+        var bits = new BitArray(bitCount);
+        for (var i = 0; i < bitCount; i++)
+            bits[i] = (frame >> bitCount - 1 - i & 1) == 1;
+
+        return bits;
+    }
+
+    private static BitArray StringToBitArray(string bits)
+    {
+        var bitArray = new BitArray(bits.Length);
+        for (var i = 0; i < bits.Length; i++)
+            bitArray[i] = bits[i] == '1';
+
+        return bitArray;
     }
 }

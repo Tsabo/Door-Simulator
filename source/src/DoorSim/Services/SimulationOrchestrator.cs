@@ -82,6 +82,28 @@ public class SimulationOrchestrator(
         SetStatus(request.ReaderId, SimulationStatus.Idle);
     }
 
+    public async Task SendBitsAsync(RawBitsRequest request)
+    {
+        if (!bank.TryGetReader(request.ReaderId, out var simulator))
+            throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
+
+        SetStatus(request.ReaderId, SimulationStatus.Running);
+
+        try
+        {
+            await simulator.SendBitsAsync(request.Bits).ConfigureAwait(false);
+            SetStatus(request.ReaderId, SimulationStatus.Success);
+        }
+        catch (Exception ex)
+        {
+            SetStatus(request.ReaderId, SimulationStatus.Error);
+            logger.LogError(ex, "Reader {R}: raw bits send failed", request.ReaderId);
+        }
+
+        await Task.Delay(1500);
+        SetStatus(request.ReaderId, SimulationStatus.Idle);
+    }
+
     public async Task RunRawEventAsync(RawDoorEventRequest request)
     {
         if (!bank.TryGetReader(request.ReaderId, out var simulator))

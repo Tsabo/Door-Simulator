@@ -89,4 +89,51 @@ public class SimulationValidationTests
 
         await Assert.That(error).IsNull();
     }
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    public async Task RawBitsRequest_InvalidReaderId_ReturnsError(int readerId)
+    {
+        var req = new RawBitsRequest(readerId, "1010");
+        var error = SimulationValidation.Validate(req);
+
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error).Contains("ReaderId must be greater than zero");
+    }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments("")]
+    [Arguments("   ")]
+    public async Task RawBitsRequest_EmptyBits_ReturnsError(string? bits)
+    {
+        var req = new RawBitsRequest(1, bits!);
+        var error = SimulationValidation.Validate(req);
+
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error).Contains("Bits cannot be empty");
+    }
+
+    [Test]
+    [Arguments("10000000000010100011100100000002")]
+    [Arguments("1010a01")]
+    [Arguments("10 10")]
+    public async Task RawBitsRequest_InvalidCharacters_ReturnsError(string bits)
+    {
+        var req = new RawBitsRequest(1, bits);
+        var error = SimulationValidation.Validate(req);
+
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error).Contains("Bits must contain only '0' and '1' characters");
+    }
+
+    [Test]
+    public async Task RawBitsRequest_Valid_ReturnsNull()
+    {
+        var req = new RawBitsRequest(1, "10000000000010100011100100000000");
+        var error = SimulationValidation.Validate(req);
+
+        await Assert.That(error).IsNull();
+    }
 }
