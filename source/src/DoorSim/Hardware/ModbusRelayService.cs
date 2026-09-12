@@ -92,6 +92,14 @@ public sealed class ModbusRelayService : IDisposable
         string portPath = NormalizeSerialPort(serialPort);
         _logger.LogInformation("Modbus probe: {Port} unit {Unit} — probing via FluentModbus", portPath, unitId);
 
+        if (!OSDP.Net.Connections.SerialPortUtils.PortExists(portPath))
+        {
+            _logger.LogWarning(
+                "Modbus probe: {Port} unit {Unit} — serial port not found on the system",
+                portPath, unitId);
+            return;
+        }
+
         (ModbusRtuClient Client, SemaphoreSlim Lock) entry;
         try
         {
@@ -156,9 +164,28 @@ public sealed class ModbusRelayService : IDisposable
     public async Task SetCoilAsync(string serialPort, byte unitId, int channel, bool active)
     {
         string portPath = NormalizeSerialPort(serialPort);
-        var entry = GetOrCreateClient(portPath);
+        if (!OSDP.Net.Connections.SerialPortUtils.PortExists(portPath))
+        {
+            _logger.LogWarning(
+                "Modbus {Port} unit {Unit}: serial port not found on the system for coil {Ch}",
+                portPath, unitId, channel);
+            return;
+        }
 
-        await entry.Lock.WaitAsync();
+        (ModbusRtuClient Client, SemaphoreSlim Lock) entry;
+        try
+        {
+            entry = GetOrCreateClient(portPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                "Modbus {Port} unit {Unit}: could not open serial port for coil {Ch} ({ExType}: {Msg})",
+                portPath, unitId, channel, ex.GetType().Name, ex.Message);
+            return;
+        }
+
+        await entry.Lock.WaitAsync().ConfigureAwait(false);
         bool portFaulted = false;
         try
         {
@@ -263,7 +290,29 @@ public sealed class ModbusRelayService : IDisposable
     public async Task<bool?> GetCoilStateAsync(string serialPort, byte unitId, int channel)
     {
         string portPath = NormalizeSerialPort(serialPort);
-        var entry = GetOrCreateClient(portPath);
+        if (!OSDP.Net.Connections.SerialPortUtils.PortExists(portPath))
+        {
+            _logger.LogWarning(
+                "Modbus {Port} unit {Unit}: serial port not found on the system for coil {Ch} state",
+                portPath, unitId, channel);
+            return TryGetCachedCoilState(portPath, unitId, channel, out bool cached) ? cached : null;
+        }
+
+        (ModbusRtuClient Client, SemaphoreSlim Lock) entry;
+        try
+        {
+            entry = GetOrCreateClient(portPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                "Modbus {Port} unit {Unit}: could not open serial port for coil {Ch} state ({ExType}: {Msg})",
+                portPath, unitId, channel, ex.GetType().Name, ex.Message);
+
+            return TryGetCachedCoilState(portPath, unitId, channel, out bool cached)
+                ? cached
+                : null;
+        }
 
         await entry.Lock.WaitAsync().ConfigureAwait(false);
         try
@@ -300,6 +349,11 @@ public sealed class ModbusRelayService : IDisposable
     private (ModbusRtuClient Client, SemaphoreSlim Lock) GetOrCreateClient(string path) =>
         _clients.GetOrAdd(path, p =>
         {
+            if (!OSDP.Net.Connections.SerialPortUtils.PortExists(p))
+            {
+                throw new FileNotFoundException($"Serial port '{p}' not found on the system.");
+            }
+
             var client = new ModbusRtuClient();
             ConfigureClient(client);
             try

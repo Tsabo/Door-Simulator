@@ -90,7 +90,18 @@ public sealed class ModbusTcpRelayService : IDisposable
     /// <param name="active"><c>true</c> to energise the coil; <c>false</c> to de-energise.</param>
     public async Task SetCoilAsync(string host, int port, byte unitId, int channel, bool active)
     {
-        var entry = GetOrCreateClient(host, port);
+        (ModbusTcpClient Client, SemaphoreSlim Lock) entry;
+        try
+        {
+            entry = GetOrCreateClient(host, port);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                "Modbus TCP {Host}:{Port} unit {Unit}: could not connect for coil {Ch} ({ExType}: {Msg})",
+                host, port, unitId, channel, ex.GetType().Name, ex.Message);
+            return;
+        }
 
         await entry.Lock.WaitAsync().ConfigureAwait(false);
         bool clientFaulted = false;
@@ -141,7 +152,18 @@ public sealed class ModbusTcpRelayService : IDisposable
     /// </summary>
     public async Task<bool?> GetCoilStateAsync(string host, int port, byte unitId, int channel)
     {
-        var entry = GetOrCreateClient(host, port);
+        (ModbusTcpClient Client, SemaphoreSlim Lock) entry;
+        try
+        {
+            entry = GetOrCreateClient(host, port);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                "Modbus TCP {Host}:{Port} unit {Unit}: could not connect for coil {Ch} state ({ExType}: {Msg})",
+                host, port, unitId, channel, ex.GetType().Name, ex.Message);
+            return TryGetCachedCoilState(host, port, unitId, channel, out bool cached) ? cached : null;
+        }
 
         await entry.Lock.WaitAsync().ConfigureAwait(false);
         try

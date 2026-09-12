@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
@@ -18,6 +19,8 @@ namespace OSDP.Net.Connections;
 public class SerialPortConnectionListener : OsdpConnectionListener
 {
     private readonly string _portName;
+    private CancellationTokenSource _cancellationTokenSource;
+    private Task _listenTask;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SerialPortConnectionListener"/> class.
@@ -40,64 +43,154 @@ public class SerialPortConnectionListener : OsdpConnectionListener
     public TimeSpan ReplyTimeout { get; set; } = TimeSpan.FromMilliseconds(200);
 
     /// <inheritdoc/>
-    public override async Task Start(Func<IOsdpConnection, Task> newConnectionHandler)
+    public override Task Start(Func<IOsdpConnection, Task> newConnectionHandler)
     {
+        if (IsRunning) return Task.CompletedTask;
+
         IsRunning = true;
+        _cancellationTokenSource = new CancellationTokenSource();
 
         Logger?.LogInformation("Starting serial port listener on {Port} @ {BaudRate} baud", _portName, BaudRate);
 
-        await OpenSerialPort(newConnectionHandler);
+        var token = _cancellationTokenSource.Token;
+        _listenTask = Task.Run(() => ListenLoop(newConnectionHandler, token), token);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc/>
+    public override async Task Stop()
+    {
+        IsRunning = false;
+        _cancellationTokenSource?.Cancel();
+
+        if (_listenTask != null)
+        {
+            try
+            {
+                await _listenTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                /* normal on shutdown */
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogWarning(ex, "Error stopping serial listener task on {Port}", _portName);
+            }
+        }
+
+        await base.Stop().ConfigureAwait(false);
+
+        _cancellationTokenSource?.Dispose();
+        _cancellationTokenSource = null;
     }
 
     /// <summary>
     /// Opens the serial port and creates a connection, automatically reopening if the connection closes.
     /// </summary>
     /// <param name="newConnectionHandler">The handler to process the new connection.</param>
-    private async Task OpenSerialPort(Func<IOsdpConnection, Task> newConnectionHandler)
+    /// <param name="cancellationToken">Cancellation token to signal listener shutdown.</param>
+    private async Task ListenLoop(Func<IOsdpConnection, Task> newConnectionHandler, CancellationToken cancellationToken)
     {
-        try
+        while (IsRunning && !cancellationToken.IsCancellationRequested)
         {
-            var connection = new SerialPortOsdpConnection(_portName, BaudRate)
+            if (!SerialPortUtils.PortExists(_portName))
             {
-                ReplyTimeout = ReplyTimeout,
-            };
-            await connection.Open();
-            
-            Logger?.LogDebug("Serial port {Port} opened successfully", _portName);
+                Logger?.LogWarning(
+                    "Serial port {Port} not found on the system; retrying in 5s",
+                    _portName);
 
-            var task = Task.Run(async () =>
-            {
                 try
                 {
-                    await newConnectionHandler(connection);
+                    await Task.Delay(5000, cancellationToken).ConfigureAwait(false);
                 }
-                catch (Exception ex)
+                catch (OperationCanceledException)
                 {
-                    Logger?.LogError(ex, "Error in serial connection handler");
+                    break;
                 }
-                finally
+
+                continue;
+            }
+
+            SerialPortOsdpConnection connection = null;
+            try
+            {
+                connection = new SerialPortOsdpConnection(_portName, BaudRate)
                 {
-                    // If still running, reopen the serial port after a brief delay
-                    if (IsRunning)
+                    ReplyTimeout = ReplyTimeout,
+                };
+                await connection.Open().ConfigureAwait(false);
+
+                Logger?.LogDebug("Serial port {Port} opened successfully", _portName);
+
+                var activeConn = connection;
+                var handlerTask = Task.Run(async () =>
+                {
+                    try
                     {
-                        Logger?.LogDebug("Serial connection closed, reopening port {Port}", _portName);
-                        await Task.Delay(1000); // Brief delay before reopening
-                        await OpenSerialPort(newConnectionHandler);
+                        await newConnectionHandler(activeConn).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        /* normal on shutdown */
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger?.LogError(ex, "Error in serial connection handler on {Port}", _portName);
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            await activeConn.Close().ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            /* best-effort */
+                        }
+                    }
+                }, cancellationToken);
+
+                RegisterConnection(connection, handlerTask);
+
+                await handlerTask.ConfigureAwait(false);
+
+                if (IsRunning && !cancellationToken.IsCancellationRequested)
+                {
+                    Logger?.LogDebug("Serial connection closed, reopening port {Port}", _portName);
+                    await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                if (connection != null)
+                {
+                    try { await connection.Close().ConfigureAwait(false); } catch (Exception closeEx) { Logger?.LogDebug(closeEx, "Error closing connection on cancel"); }
+                }
+                break;
+            }
+            catch (Exception ex)
+            {
+                if (connection != null)
+                {
+                    try { await connection.Close().ConfigureAwait(false); } catch (Exception closeEx) { Logger?.LogDebug(closeEx, "Error closing connection on error"); }
+                }
+
+                Logger?.LogWarning(
+                    "Failed to open serial port {Port} ({ExType}: {Msg}); retrying in 5s",
+                    _portName, ex.GetType().Name, ex.Message);
+
+                if (IsRunning && !cancellationToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await Task.Delay(5000, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
                     }
                 }
-            });
-            
-            RegisterConnection(connection, task);
-        }
-        catch (Exception ex)
-        {
-            Logger?.LogError(ex, "Failed to open serial port {Port}", _portName);
-            
-            // Retry after delay if still running
-            if (IsRunning)
-            {
-                await Task.Delay(5000); // Longer delay on error
-                await OpenSerialPort(newConnectionHandler);
             }
         }
     }

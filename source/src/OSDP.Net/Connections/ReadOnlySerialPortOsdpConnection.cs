@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.IO.Ports;
 using System.Threading;
 using System.Threading.Tasks;
@@ -39,8 +40,25 @@ namespace OSDP.Net.Connections
                     Handshake = Handshake.None
                 };
 
-                _serialPort.Open();
-                IsOpen = true;
+                try
+                {
+                    _serialPort.Open();
+                    IsOpen = true;
+                }
+                catch
+                {
+                    try
+                    {
+                        _serialPort.Dispose();
+                    }
+                    catch
+                    {
+                        /* best-effort */
+                    }
+                    _serialPort = null;
+                    IsOpen = false;
+                    throw;
+                }
             }
 
             return Task.CompletedTask;
@@ -51,8 +69,25 @@ namespace OSDP.Net.Connections
         {
             if (_serialPort != null)
             {
-                _serialPort.Close();
-                _serialPort.Dispose();
+                try
+                {
+                    if (_serialPort.IsOpen)
+                        _serialPort.Close();
+                }
+                catch
+                {
+                    /* best-effort */
+                }
+
+                try
+                {
+                    _serialPort.Dispose();
+                }
+                catch
+                {
+                    /* best-effort */
+                }
+
                 _serialPort = null;
             }
 
@@ -73,19 +108,24 @@ namespace OSDP.Net.Connections
         /// <inheritdoc />
         public override async Task<int> ReadAsync(byte[] buffer, CancellationToken token)
         {
-            if (_serialPort == null || !IsOpen)
+            var serialPort = _serialPort;
+            if (serialPort == null || !serialPort.IsOpen)
             {
                 throw new InvalidOperationException("Connection is not open.");
             }
 
-            var task = _serialPort.BaseStream.ReadAsync(buffer, 0, buffer.Length, token);
-
-            if (await Task.WhenAny(task, Task.Delay(-1, token)) == task)
+            try
             {
-                return await task.ConfigureAwait(false);
+                return await serialPort.BaseStream.ReadAsync(buffer, 0, buffer.Length, token).ConfigureAwait(false);
             }
-
-            throw new TimeoutException();
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new IOException($"Error reading from serial port '{_portName}': {ex.Message}", ex);
+            }
         }
 
         /// <inheritdoc />

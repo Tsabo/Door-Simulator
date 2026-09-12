@@ -218,28 +218,40 @@ public sealed class DoorContactController : IDisposable
     /// Routes a relay coil write to the appropriate Modbus transport.
     /// TCP takes precedence over RTU when ModbusTcpHost is set.
     /// </summary>
-    private Task SetRelayCoilAsync(int channel, bool active, string name)
+    private async Task SetRelayCoilAsync(int channel, bool active, string name)
     {
         if (_config.ModbusUnitId is null)
         {
             _logger.LogWarning(
                 "Door {Id}: {Name} Modbus channel {Ch} has no unit ID configured — skipping",
                 _config.Id, name, channel);
-            return Task.CompletedTask;
+            return;
         }
 
-        if (_config.ModbusTcpHost is not null && _modbusTcp is not null)
+        try
         {
-            int tcpPort = _config.ModbusTcpPort ?? 502;
-            return _modbusTcp.SetCoilAsync(_config.ModbusTcpHost, tcpPort, _config.ModbusUnitId.Value, channel, active);
+            if (_config.ModbusTcpHost is not null && _modbusTcp is not null)
+            {
+                int tcpPort = _config.ModbusTcpPort ?? 502;
+                await _modbusTcp.SetCoilAsync(_config.ModbusTcpHost, tcpPort, _config.ModbusUnitId.Value, channel, active).ConfigureAwait(false);
+                return;
+            }
+
+            if (_config.ModbusSerialPort is not null && _modbus is not null)
+            {
+                await _modbus.SetCoilAsync(_config.ModbusSerialPort, _config.ModbusUnitId.Value, channel, active).ConfigureAwait(false);
+                return;
+            }
+
+            _logger.LogWarning(
+                "Door {Id}: {Name} Modbus channel {Ch} has no transport configured (no TCP host or serial port) — skipping",
+                _config.Id, name, channel);
         }
-
-        if (_config.ModbusSerialPort is not null && _modbus is not null)
-            return _modbus.SetCoilAsync(_config.ModbusSerialPort, _config.ModbusUnitId.Value, channel, active);
-
-        _logger.LogWarning(
-            "Door {Id}: {Name} Modbus channel {Ch} has no transport configured (no TCP host or serial port) — skipping",
-            _config.Id, name, channel);
-        return Task.CompletedTask;
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Door {Id}: {Name} Modbus channel {Ch} write failed ({ExType}: {Msg})",
+                _config.Id, name, channel, ex.GetType().Name, ex.Message);
+        }
     }
 }

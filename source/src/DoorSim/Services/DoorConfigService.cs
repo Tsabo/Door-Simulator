@@ -269,29 +269,44 @@ public class DoorConfigService(DoorSimDbContext db)
 
     private static string[] DiscoverSerialPorts()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || !Directory.Exists("/dev"))
-            return [];
+        var ports = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && Directory.Exists("/dev"))
+        {
+            try
+            {
+                foreach (var path in Directory.EnumerateFiles("/dev", "tty*"))
+                {
+                    var fileName = Path.GetFileName(path);
+                    if (fileName.StartsWith("ttyRS485", StringComparison.OrdinalIgnoreCase)
+                        || fileName.StartsWith("ttyACM", StringComparison.OrdinalIgnoreCase)
+                        || fileName.StartsWith("ttyAMA", StringComparison.OrdinalIgnoreCase)
+                        || fileName.StartsWith("ttyUSB", StringComparison.OrdinalIgnoreCase)
+                        || fileName.StartsWith("ttyS", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ports.Add(path);
+                    }
+                }
+            }
+            catch
+            {
+                /* best-effort */
+            }
+        }
 
         try
         {
-            return
-            [
-                .. Directory.EnumerateFiles("/dev", "tty*")
-                    .Where(path =>
-                    {
-                        var fileName = Path.GetFileName(path);
-                        return fileName.StartsWith("ttyRS485", StringComparison.OrdinalIgnoreCase)
-                               || fileName.StartsWith("ttyACM", StringComparison.OrdinalIgnoreCase)
-                               || fileName.StartsWith("ttyAMA", StringComparison.OrdinalIgnoreCase)
-                               || fileName.StartsWith("ttyUSB", StringComparison.OrdinalIgnoreCase)
-                               || fileName.StartsWith("ttyS", StringComparison.OrdinalIgnoreCase);
-                    })
-                    .OrderBy(path => path, StringComparer.OrdinalIgnoreCase),
-            ];
+            foreach (var name in System.IO.Ports.SerialPort.GetPortNames())
+            {
+                if (!string.IsNullOrWhiteSpace(name))
+                    ports.Add(name);
+            }
         }
         catch
         {
-            return [];
+            /* best-effort */
         }
+
+        return [.. ports.OrderBy(p => p, StringComparer.OrdinalIgnoreCase)];
     }
 }

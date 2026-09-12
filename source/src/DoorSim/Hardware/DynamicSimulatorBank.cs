@@ -89,7 +89,16 @@ public sealed class DynamicSimulatorBank : IReaderBank, IAsyncDisposable
         var doors = await svc.GetAllAsync().ConfigureAwait(false);
 
         foreach (var door in doors)
-            await AddDoor(door).ConfigureAwait(false);
+        {
+            try
+            {
+                await AddDoor(door).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load simulator for door {Id} ({Label})", door.Id, door.Label);
+            }
+        }
 
         // Probe each distinct Modbus RTU port so connection errors appear in the log at startup.
         if (_modbus is not null)

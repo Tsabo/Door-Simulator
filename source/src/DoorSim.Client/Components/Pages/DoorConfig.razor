@@ -79,6 +79,10 @@ else
                                    Variant="Variant.Outlined"
                                    Margin="Margin.Dense"
                                    Class="mb-4">
+                            @if (!string.IsNullOrWhiteSpace(_form.OsdpSerialPort) && !_availableSerialPorts.Any(p => string.Equals(p, _form.OsdpSerialPort, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                <MudSelectItem Value="@_form.OsdpSerialPort">@_form.OsdpSerialPort (not detected)</MudSelectItem>
+                            }
                             @foreach (var port in _availableSerialPorts)
                             {
                                 <MudSelectItem Value="@port">@port</MudSelectItem>
@@ -227,6 +231,10 @@ else
                                            Variant="Variant.Outlined"
                                            Margin="Margin.Dense"
                                            Class="mb-4">
+                                    @if (!string.IsNullOrWhiteSpace(_form.ModbusSerialPort) && !_availableSerialPorts.Any(p => string.Equals(p, _form.ModbusSerialPort, StringComparison.OrdinalIgnoreCase)))
+                                    {
+                                        <MudSelectItem Value="@_form.ModbusSerialPort">@_form.ModbusSerialPort (not detected)</MudSelectItem>
+                                    }
                                     @foreach (var port in _availableSerialPorts)
                                     {
                                         <MudSelectItem Value="@port">@port</MudSelectItem>
@@ -295,7 +303,7 @@ else
         <HeaderContent>
             <MudTh>Label</MudTh>
             <MudTh>Protocol</MudTh>
-            <MudTh>D0</MudTh>
+            <MudTh>D0 / Port</MudTh>
             <MudTh>D1 / OSDP Addr</MudTh>
             <MudTh>Baud</MudTh>
             <MudTh>DPS</MudTh>
@@ -309,7 +317,7 @@ else
                     @context.Protocol
                 </MudChip>
             </MudTd>
-            <MudTd DataLabel="D0">@(context.D0Pin?.ToString() ?? "—")</MudTd>
+            <MudTd DataLabel="D0 / Port">@(context.Protocol == ProtocolType.Wiegand ? (context.D0Pin?.ToString() ?? "—") : (context.OsdpSerialPort ?? "—"))</MudTd>
             <MudTd DataLabel="D1 / OSDP Addr">
                 @(context.Protocol == ProtocolType.Wiegand ? (context.D1Pin?.ToString() ?? "—") : (context.OsdpAddress?.ToString() ?? "—"))
             </MudTd>
@@ -353,9 +361,19 @@ else
     private async Task LoadAsync()
     {
         _loading = true;
-        _doors = await Doors.GetAllAsync();
-        await LoadAvailableSerialPortsAsync(_editing?.Id);
-        _loading = false;
+        try
+        {
+            _doors = await Doors.GetAllAsync();
+            await LoadAvailableSerialPortsAsync(_editing?.Id);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load door configuration: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private async Task BeginEditAsync(DoorConfiguration door)

@@ -195,24 +195,34 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var doorsTask = Doors.GetAllAsync();
-        var cardsTask = Cards.GetAllAsync();
-        await Task.WhenAll(doorsTask, cardsTask);
-        _doors = doorsTask.Result;
-        _cards = cardsTask.Result;
-
-        foreach (var door in _doors)
+        try
         {
-            _statuses[door.Id]     = SimulationStatus.Idle;
-            _connectivity[door.Id] = false;
-            _ledStates[door.Id]    = null;
-            _selectedCard[door.Id] = _cards.Length > 0 ? _cards[0].Id : 0;
-            _errors[door.Id]       = null;
-            _doorOpen[door.Id]     = false;
-            _rexActive[door.Id]    = false;
+            var doorsTask = Doors.GetAllAsync();
+            var cardsTask = Cards.GetAllAsync();
+            await Task.WhenAll(doorsTask, cardsTask);
+            _doors = doorsTask.Result;
+            _cards = cardsTask.Result;
+
+            foreach (var door in _doors)
+            {
+                _statuses[door.Id]     = SimulationStatus.Idle;
+                _connectivity[door.Id] = false;
+                _ledStates[door.Id]    = null;
+                _selectedCard[door.Id] = _cards.Length > 0 ? _cards[0].Id : 0;
+                _errors[door.Id]       = null;
+                _doorOpen[door.Id]     = false;
+                _rexActive[door.Id]    = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing reader panel: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
         }
 
-        _loading = false;
         _ = SubscribeToStatusStreamAsync(_cts.Token);
     }
 
@@ -236,6 +246,10 @@ else
             }
         }
         catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Status stream subscription error: {ex.Message}");
+        }
     }
 
     // ── Simulation events ────────────────────────────────────────────────────

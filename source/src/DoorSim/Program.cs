@@ -6,19 +6,39 @@ using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 using Serilog;
 
+AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+{
+    var ex = args.ExceptionObject as Exception;
+    Log.Fatal(ex, "Unhandled exception in AppDomain (IsTerminating={IsTerminating}): {Message}",
+        args.IsTerminating, ex?.Message);
+};
+
+TaskScheduler.UnobservedTaskException += (_, args) =>
+{
+    Log.Warning(args.Exception, "Unobserved task exception: {Message}", args.Exception.Message);
+    args.SetObserved();
+};
+
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseSerilog((ctx, lc) => lc
-    .ReadFrom.Configuration(ctx.Configuration)
-    // OSDP.Net logs TimeoutException as "Unexpected exception in polling loop" at Error level
-    // whenever the serial port read times out between panel polls. This is normal inter-poll
-    // silence, not a real error. Filter it out so genuine OSDP errors remain visible.
-    .Filter.ByExcluding(e =>
-        e.Exception is TimeoutException &&
-        e.Properties.TryGetValue("SourceContext", out var sc) &&
-        sc.ToString().Contains("OSDP.Net"))
-    .WriteTo.Console(outputTemplate: "{Timestamp:HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-    .WriteTo.Seq(ctx.Configuration["Seq:ServerUrl"] ?? "http://localhost:5341"));
+builder.Host.UseSerilog((ctx, lc) =>
+{
+    lc.ReadFrom.Configuration(ctx.Configuration)
+        // OSDP.Net logs TimeoutException as "Unexpected exception in polling loop" at Error level
+        // whenever the serial port read times out between panel polls. This is normal inter-poll
+        // silence, not a real error. Filter it out so genuine OSDP errors remain visible.
+        .Filter.ByExcluding(e =>
+            e.Exception is TimeoutException &&
+            e.Properties.TryGetValue("SourceContext", out var sc) &&
+            sc.ToString().Contains("OSDP.Net"))
+        .WriteTo.Console(outputTemplate: "{Timestamp:HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}");
+
+    var seqUrl = ctx.Configuration["Seq:ServerUrl"];
+    if (!string.IsNullOrWhiteSpace(seqUrl))
+    {
+        lc.WriteTo.Seq(seqUrl);
+    }
+});
 
 // -------------------------------------------------------------------------
 // Services
@@ -128,7 +148,16 @@ await app.Services.GetRequiredService<DynamicSimulatorBank>().LoadFromDbAsync();
 // Middleware
 // -------------------------------------------------------------------------
 
-app.UseExceptionHandler();
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+    app.UseWebAssemblyDebugging();
+}
+else
+{
+    app.UseExceptionHandler();
+}
+
 app.UseForwardedHeaders();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();

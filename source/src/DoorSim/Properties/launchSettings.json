@@ -3,10 +3,11 @@
     "DoorSim": {
       "commandName": "Project",
       "launchBrowser": true,
+      "inspectUri": "{wsProtocol}://{url.hostname}:{url.port}/_framework/debug/ws-proxy?browser={browserInspectUri}",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "applicationUrl": "https://localhost:55915;http://localhost:55917"
+      "applicationUrl": "http://localhost:5000"
     },
     "DoorSim-Pi": {
       "commandName": "Project",

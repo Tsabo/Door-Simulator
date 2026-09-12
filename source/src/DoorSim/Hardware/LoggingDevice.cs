@@ -2,7 +2,6 @@ using OSDP.Net;
 using OSDP.Net.Model;
 using OSDP.Net.Model.CommandData;
 using OSDP.Net.Model.ReplyData;
-using DoorSim.Shared.Models;
 using CommunicationConfiguration = OSDP.Net.Model.CommandData.CommunicationConfiguration;
 using DeviceCapabilities = OSDP.Net.Model.ReplyData.DeviceCapabilities;
 

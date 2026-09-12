@@ -8,6 +8,7 @@
     <Project Path="src/DoorSim.Client/DoorSim.Client.csproj" />
     <Project Path="src/DoorSim.Shared/DoorSim.Shared.csproj" />
     <Project Path="src/DoorSim/DoorSim.csproj" />
+    <Project Path="src/OSDP.Net/OSDP.Net.csproj" />
   </Folder>
   <Folder Name="/test/">
     <Project Path="test/DoorSim.Tests/DoorSim.Tests.csproj" />

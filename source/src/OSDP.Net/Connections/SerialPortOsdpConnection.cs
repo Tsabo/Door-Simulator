@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.IO.Ports;
 using System.Linq;
 using System.Threading;
@@ -68,8 +69,25 @@ namespace OSDP.Net.Connections
             if (_serialPort == null)
             {
                 _serialPort = new(_portName, BaudRate);
-                _serialPort.Open();
-                IsOpen = true;
+                try
+                {
+                    _serialPort.Open();
+                    IsOpen = true;
+                }
+                catch
+                {
+                    try
+                    {
+                        _serialPort.Dispose();
+                    }
+                    catch
+                    {
+                        /* best-effort */
+                    }
+                    _serialPort = null;
+                    IsOpen = false;
+                    throw;
+                }
             }
 
             return Task.CompletedTask;
@@ -140,9 +158,32 @@ namespace OSDP.Net.Connections
         /// <inheritdoc />
         public override Task Close()
         {
-            _serialPort?.Close();
-            _serialPort?.Dispose();
-            _serialPort = null;
+            if (_serialPort != null)
+            {
+                try
+                {
+                    if (_serialPort.IsOpen)
+                    {
+                        _serialPort.Close();
+                    }
+                }
+                catch
+                {
+                    /* best-effort */
+                }
+
+                try
+                {
+                    _serialPort.Dispose();
+                }
+                catch
+                {
+                    /* best-effort */
+                }
+
+                _serialPort = null;
+            }
+
             IsOpen = false;
             return Task.CompletedTask;
         }
@@ -150,28 +191,51 @@ namespace OSDP.Net.Connections
         /// <inheritdoc />
         public override async Task WriteAsync(byte[] buffer)
         {
+            var serialPort = _serialPort;
+            if (serialPort == null || !serialPort.IsOpen)
+            {
+                throw new InvalidOperationException("Serial port is not open.");
+            }
+
             if (DiscardBuffersBeforeWrite)
             {
                 // Found an issue where many timeouts would fill up the receive buffer.
                 // When writing to the port, there should be nothing in the buffers.
-                _serialPort.DiscardInBuffer();
-                _serialPort.DiscardOutBuffer();
+                try
+                {
+                    serialPort.DiscardInBuffer();
+                    serialPort.DiscardOutBuffer();
+                }
+                catch
+                {
+                    /* best-effort */
+                }
             }
 
-            await _serialPort.BaseStream.WriteAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+            await serialPort.BaseStream.WriteAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
         public override async Task<int> ReadAsync(byte[] buffer, CancellationToken token)
         {
-            var task = _serialPort.BaseStream.ReadAsync(buffer, 0, buffer.Length, token);
-
-            if (await Task.WhenAny(task, Task.Delay(-1, token)) == task)
+            var serialPort = _serialPort;
+            if (serialPort == null || !serialPort.IsOpen)
             {
-                return await task.ConfigureAwait(false);
+                throw new InvalidOperationException("Serial port is not open.");
             }
 
-            throw new TimeoutException();
+            try
+            {
+                return await serialPort.BaseStream.ReadAsync(buffer, 0, buffer.Length, token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new IOException($"Error reading from serial port '{_portName}': {ex.Message}", ex);
+            }
         }
 
         /// <inheritdoc />

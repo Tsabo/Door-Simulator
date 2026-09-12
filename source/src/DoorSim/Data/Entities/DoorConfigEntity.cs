@@ -23,7 +23,7 @@ public class DoorConfigEntity
 
     public DoorConfiguration ToDto() => new(
         Id, Label,
-        Enum.Parse<ProtocolType>(Protocol),
+        Enum.TryParse<ProtocolType>(Protocol, true, out var proto) ? proto : ProtocolType.Wiegand,
         D0Pin, D1Pin, OsdpAddress, OsdpSerialPort, OsdpBaudRate, DpsPin, RexPin,
         ModbusSerialPort, ModbusUnitId, DpsModbusChannel, RexModbusChannel,
         ModbusTcpHost, ModbusTcpPort, DpsNormallyOpen, RexNormallyOpen);

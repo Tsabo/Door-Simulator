@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Microsoft.AspNetCore.Components.WebAssembly.Http;
 
 namespace DoorSim.Client.Services;
 
@@ -87,7 +88,16 @@ public class SimulationApiClient(HttpClient http)
             await enumerator.DisposeAsync();
 
             if (!ct.IsCancellationRequested)
-                await Task.Delay(2000, ct).ConfigureAwait(false);
+            {
+                try
+                {
+                    await Task.Delay(2000, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    yield break;
+                }
+            }
         }
     }
 
@@ -97,26 +107,31 @@ public class SimulationApiClient(HttpClient http)
     /// </summary>
     private async IAsyncEnumerable<DoorStatusUpdate[]> ReadStreamOnceAsync([EnumeratorCancellation] CancellationToken ct = default)
     {
-        using var response = await http.GetAsync(
-            "/api/simulate/stream", HttpCompletionOption.ResponseHeadersRead, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/simulate/stream");
+        request.SetBrowserResponseStreamingEnabled(true);
+
+        using var response = await http.SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
 
         response.EnsureSuccessStatusCode();
 
-        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         using var reader = new StreamReader(stream);
 
         while (!ct.IsCancellationRequested)
         {
-            var line = await reader.ReadLineAsync(ct);
+            var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
             if (line is null)
                 yield break; // server closed — outer loop will reconnect
 
             if (!line.StartsWith("data: "))
                 continue;
 
-            var updates = JsonSerializer.Deserialize<DoorStatusUpdate[]>(
-                line["data: ".Length..], DoorSimJson.Options);
+            var json = line["data: ".Length..];
+            if (string.IsNullOrWhiteSpace(json))
+                continue;
 
+            var updates = JsonSerializer.Deserialize<DoorStatusUpdate[]>(json, DoorSimJson.Options);
             if (updates is not null)
                 yield return updates;
         }
