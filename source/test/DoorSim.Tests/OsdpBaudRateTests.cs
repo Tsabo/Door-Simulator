@@ -8,8 +8,8 @@ using Microsoft.EntityFrameworkCore;
 namespace DoorSim.Tests;
 
 /// <summary>
-/// Tests for the per-door OSDP baud rate override: <see cref="OsdpBaudRates"/>,
-/// entity mapping, and <see cref="DoorConfigService"/> validation/persistence.
+/// Tests for the per-door OSDP baud rate override: <see cref="OsdpBaudRates" />,
+/// entity mapping, and <see cref="DoorConfigService" /> validation/persistence.
 /// </summary>
 public class OsdpBaudRateTests
 {
@@ -18,10 +18,7 @@ public class OsdpBaudRateTests
     // -------------------------------------------------------------------------
 
     [Test]
-    public async Task Resolve_NullFallsBackToDefault()
-    {
-        await Assert.That(OsdpBaudRates.Resolve(null)).IsEqualTo(9600);
-    }
+    public async Task Resolve_NullFallsBackToDefault() => await Assert.That(OsdpBaudRates.Resolve(null)).IsEqualTo(9600);
 
     [Test]
     [Arguments(9600)]
@@ -42,10 +39,7 @@ public class OsdpBaudRateTests
     [Arguments(9601)]
     [Arguments(230400)]
     [Arguments(-9600)]
-    public async Task IsSupported_RejectsRatesOutsideSpec(int baud)
-    {
-        await Assert.That(OsdpBaudRates.IsSupported(baud)).IsFalse();
-    }
+    public async Task IsSupported_RejectsRatesOutsideSpec(int baud) => await Assert.That(OsdpBaudRates.IsSupported(baud)).IsFalse();
 
     // -------------------------------------------------------------------------
     // Entity mapping round-trip
@@ -56,7 +50,7 @@ public class OsdpBaudRateTests
     [Arguments(115200)]
     public async Task EntityRoundTrip_PreservesBaudRate(int baud)
     {
-        var dto = MakeOsdpDoor(baudRate: baud);
+        var dto = MakeOsdpDoor(baud);
         var roundTripped = DoorConfigEntity.FromDto(dto).ToDto();
         await Assert.That(roundTripped.OsdpBaudRate).IsEqualTo(baud);
     }
@@ -64,7 +58,7 @@ public class OsdpBaudRateTests
     [Test]
     public async Task EntityRoundTrip_PreservesNullBaudRate()
     {
-        var dto = MakeOsdpDoor(baudRate: null);
+        var dto = MakeOsdpDoor(null);
         var roundTripped = DoorConfigEntity.FromDto(dto).ToDto();
         await Assert.That(roundTripped.OsdpBaudRate).IsNull();
     }
@@ -79,7 +73,7 @@ public class OsdpBaudRateTests
         using var ctx = NewDb();
         var svc = new DoorConfigService(ctx.Db);
 
-        var (result, error) = await svc.CreateAsync(MakeOsdpDoor(baudRate: 4800));
+        var (result, error) = await svc.CreateAsync(MakeOsdpDoor(4800));
 
         await Assert.That(result).IsNull();
         await Assert.That(error).IsNotNull();
@@ -92,7 +86,7 @@ public class OsdpBaudRateTests
         using var ctx = NewDb();
         var svc = new DoorConfigService(ctx.Db);
 
-        var (result, error) = await svc.CreateAsync(MakeOsdpDoor(baudRate: 19200));
+        var (result, error) = await svc.CreateAsync(MakeOsdpDoor(19200));
 
         await Assert.That(error).IsNull();
         await Assert.That(result!.OsdpBaudRate).IsEqualTo(19200);
@@ -104,7 +98,7 @@ public class OsdpBaudRateTests
         using var ctx = NewDb();
         var svc = new DoorConfigService(ctx.Db);
 
-        var (created, _) = await svc.CreateAsync(MakeOsdpDoor(baudRate: null));
+        var (created, _) = await svc.CreateAsync(MakeOsdpDoor(null));
         var (updated, error) = await svc.UpdateAsync(
             created!.Id, created with { OsdpBaudRate = 38400 });
 
@@ -123,9 +117,11 @@ public class OsdpBaudRateTests
         var svc = new DoorConfigService(ctx.Db);
 
         // A nonsense rate on a Wiegand door is irrelevant - the field is unused.
-        var dto = MakeOsdpDoor(baudRate: 4800) with
+        var dto = MakeOsdpDoor(4800) with
         {
             Protocol = ProtocolType.Wiegand,
+            D0Pin = 4,
+            D1Pin = 17,
             OsdpSerialPort = null,
         };
 
@@ -140,28 +136,29 @@ public class OsdpBaudRateTests
     // -------------------------------------------------------------------------
 
     private static DoorConfiguration MakeOsdpDoor(int? baudRate) => new(
-        Id: 0,
-        Label: "Test Reader",
-        Protocol: ProtocolType.Osdp,
-        D0Pin: null,
-        D1Pin: null,
-        OsdpAddress: 0,
-        OsdpSerialPort: "/dev/ttyRS485_1_1",
-        OsdpBaudRate: baudRate,
-        DpsPin: null,
-        RexPin: null,
-        ModbusSerialPort: null,
-        ModbusUnitId: null,
-        DpsModbusChannel: null,
-        RexModbusChannel: null,
-        ModbusTcpHost: null,
-        ModbusTcpPort: null);
+        0,
+        "Test Reader",
+        ProtocolType.Osdp,
+        null,
+        null,
+        0,
+        "/dev/ttyRS485_1_1",
+        baudRate,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
+
+    private static DbFixture NewDb() => new();
 
     /// <summary>In-memory SQLite context; the connection must outlive the DbContext.</summary>
     private sealed class DbFixture : IDisposable
     {
         private readonly SqliteConnection _connection;
-        public DoorSimDbContext Db { get; }
 
         public DbFixture()
         {
@@ -171,8 +168,11 @@ public class OsdpBaudRateTests
                 new DbContextOptionsBuilder<DoorSimDbContext>()
                     .UseSqlite(_connection)
                     .Options);
+
             Db.Database.EnsureCreated();
         }
+
+        public DoorSimDbContext Db { get; }
 
         public void Dispose()
         {
@@ -180,6 +180,4 @@ public class OsdpBaudRateTests
             _connection.Dispose();
         }
     }
-
-    private static DbFixture NewDb() => new();
 }

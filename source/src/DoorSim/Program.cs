@@ -65,6 +65,8 @@ builder.Services.AddDbContext<DoorSimDbContext>(opt =>
 builder.Services.AddScoped<CardLibraryService>();
 builder.Services.AddScoped<DoorConfigService>();
 
+builder.Services.AddProblemDetails();
+
 // Enums serialize as their string name (e.g. "Wiegand26") rather than the default integer —
 // self-explanatory on the wire and in the generated OpenAPI schema. Keep in sync with the
 // Blazor client, which uses the matching DoorSimJson.Options for the same reason.
@@ -95,8 +97,9 @@ builder.Services.AddOpenApi(options =>
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor
-                             | ForwardedHeaders.XForwardedProto
-                             | ForwardedHeaders.XForwardedHost;
+                               | ForwardedHeaders.XForwardedProto
+                               | ForwardedHeaders.XForwardedHost;
+
     options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
@@ -125,6 +128,7 @@ await app.Services.GetRequiredService<DynamicSimulatorBank>().LoadFromDbAsync();
 // Middleware
 // -------------------------------------------------------------------------
 
+app.UseExceptionHandler();
 app.UseForwardedHeaders();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();

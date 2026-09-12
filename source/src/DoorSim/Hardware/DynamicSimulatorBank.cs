@@ -1,41 +1,60 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace DoorSim.Hardware;
 
 /// <summary>
-/// Singleton that manages all active <see cref="IReaderSimulator"/> instances.
+/// Singleton that manages all active <see cref="IReaderSimulator" /> instances.
 /// Door configurations are loaded from the database at startup and can be refreshed
 /// at runtime as doors are added, updated, or deleted via the API.
-/// Owns the shared <see cref="GpioController"/> for the application lifetime.
+/// Owns the shared <see cref="GpioController" /> for the application lifetime.
 /// </summary>
 public sealed class DynamicSimulatorBank : IReaderBank, IAsyncDisposable
 {
     private readonly GpioController? _gpio;
-    private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<DynamicSimulatorBank> _logger;
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly ModbusRelayService? _modbus;
     private readonly ModbusTcpRelayService? _modbusTcp;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ConcurrentDictionary<int, IReaderSimulator> _simulators = new();
 
-    public DynamicSimulatorBank(
-        ILoggerFactory loggerFactory,
+    public DynamicSimulatorBank(ILoggerFactory loggerFactory,
         IServiceScopeFactory scopeFactory,
         GpioController? gpio,
         ModbusRelayService modbus,
         ModbusTcpRelayService modbusTcp)
     {
         _loggerFactory = loggerFactory;
-        _logger        = loggerFactory.CreateLogger<DynamicSimulatorBank>();
-        _scopeFactory  = scopeFactory;
-        _modbus        = modbus;
-        _modbusTcp     = modbusTcp;
-        _gpio          = gpio;
+        _logger = loggerFactory.CreateLogger<DynamicSimulatorBank>();
+        _scopeFactory = scopeFactory;
+        _modbus = modbus;
+        _modbusTcp = modbusTcp;
+        _gpio = gpio;
+    }
+
+    // -------------------------------------------------------------------------
+    // IAsyncDisposable
+    // -------------------------------------------------------------------------
+
+    public async ValueTask DisposeAsync()
+    {
+        foreach (var sim in _simulators.Values)
+        {
+            if (sim is IAsyncDisposable asyncSim)
+                await asyncSim.DisposeAsync();
+            else
+                (sim as IDisposable)?.Dispose();
+        }
+
+        _simulators.Clear();
+        // GpioController is owned by the DI container — do not dispose here.
     }
 
     // -------------------------------------------------------------------------
     // IReaderBank
     // -------------------------------------------------------------------------
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     public IReaderSimulator GetReader(int doorId)
     {
         if (!_simulators.TryGetValue(doorId, out var sim))
@@ -44,7 +63,15 @@ public sealed class DynamicSimulatorBank : IReaderBank, IAsyncDisposable
         return sim;
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
+    public bool TryGetReader(int doorId, [NotNullWhen(true)] out IReaderSimulator? simulator) =>
+        _simulators.TryGetValue(doorId, out simulator);
+
+    /// <inheritdoc />
+    public bool ContainsReader(int doorId) =>
+        _simulators.ContainsKey(doorId);
+
+    /// <inheritdoc />
     public IReadOnlyCollection<int> ActiveDoorIds => [.. _simulators.Keys];
 
     // -------------------------------------------------------------------------
@@ -91,7 +118,9 @@ public sealed class DynamicSimulatorBank : IReaderBank, IAsyncDisposable
         _logger.LogInformation(
             "DynamicSimulatorBank loaded — {Count} door(s), GPIO {GpioState}",
             _simulators.Count,
-            _gpio is not null ? "active" : "unavailable (dev mode)");
+            _gpio is not null
+                ? "active"
+                : "unavailable (dev mode)");
     }
 
     /// <summary>Add or replace the simulator for a door configuration.</summary>
@@ -108,7 +137,7 @@ public sealed class DynamicSimulatorBank : IReaderBank, IAsyncDisposable
 
     /// <summary>
     /// Remove and dispose the simulator for a door.
-    /// Must await <see cref="IAsyncDisposable"/> (OSDP) — a fire-and-forget or IDisposable-only
+    /// Must await <see cref="IAsyncDisposable" /> (OSDP) — a fire-and-forget or IDisposable-only
     /// cast here leaves the old OSDP.Net Device/listener running in the background, permanently
     /// holding its serial port and retrying forever, which starves any new simulator reassigned
     /// to that port.
@@ -122,21 +151,5 @@ public sealed class DynamicSimulatorBank : IReaderBank, IAsyncDisposable
             await asyncSim.DisposeAsync().ConfigureAwait(false);
         else
             (sim as IDisposable)?.Dispose();
-    }
-
-    // -------------------------------------------------------------------------
-    // IAsyncDisposable
-    // -------------------------------------------------------------------------
-
-    public async ValueTask DisposeAsync()
-    {
-        foreach (var sim in _simulators.Values)
-            if (sim is IAsyncDisposable asyncSim)
-                await asyncSim.DisposeAsync();
-            else
-                (sim as IDisposable)?.Dispose();
-
-        _simulators.Clear();
-        // GpioController is owned by the DI container — do not dispose here.
     }
 }

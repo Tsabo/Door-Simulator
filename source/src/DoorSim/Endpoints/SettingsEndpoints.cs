@@ -11,15 +11,22 @@ public static class SettingsEndpoints
             .WithName("GetSimulationSettings")
             .WithSummary("Get the current simulation timing settings.")
             .WithDescription("Covers card-to-door delay, door-open duration, REX lead time, and quick-REX " +
-                "duration used by the /api/simulate endpoints.")
-            .Produces<SimulationTimingSettings>(StatusCodes.Status200OK);
+                             "duration used by the /api/simulate endpoints.")
+            .Produces<SimulationTimingSettings>();
 
         group.MapPut("/simulation", async (SimulationTimingSettings dto, SimulationSettingsService svc) =>
-                Results.Ok(await svc.UpdateAsync(dto)))
+            {
+                var (result, error) = await svc.UpdateAsync(dto);
+                if (error is not null)
+                    return Results.BadRequest(error);
+
+                return Results.Ok(result);
+            })
             .WithName("UpdateSimulationSettings")
             .WithSummary("Update simulation timing settings.")
             .WithDescription("Applies immediately to all subsequent simulated events — no restart required.")
-            .Produces<SimulationTimingSettings>(StatusCodes.Status200OK);
+            .Produces<SimulationTimingSettings>()
+            .Produces<string>(StatusCodes.Status400BadRequest);
 
         return app;
     }

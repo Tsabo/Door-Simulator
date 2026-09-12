@@ -1,3 +1,5 @@
+using DoorSim.Validation;
+
 namespace DoorSim.Services;
 
 /// <summary>
@@ -9,9 +11,7 @@ public class SimulationSettingsService(
     IServiceScopeFactory scopeFactory,
     ILogger<SimulationSettingsService> logger)
 {
-    private SimulationTimingSettings _current = new();
-
-    public SimulationTimingSettings Current => _current;
+    public SimulationTimingSettings Current { get; private set; } = new();
 
     /// <summary>Load settings from the database on startup. Uses defaults if no row exists.</summary>
     public async Task LoadAsync()
@@ -21,20 +21,22 @@ public class SimulationSettingsService(
         var entity = await db.SimulationSettings.FirstOrDefaultAsync().ConfigureAwait(false);
         if (entity is not null)
         {
-            _current = entity.ToDto();
+            Current = entity.ToDto();
             logger.LogInformation(
                 "Simulation timing loaded — CardToDoor={C}ms DoorOpen={D}ms RexLead={R}ms QuickRex={Q}ms",
-                _current.CardToDoorDelayMs, _current.DoorOpenMs, _current.RexLeadMs, _current.QuickRexMs);
+                Current.CardToDoorDelayMs, Current.DoorOpenMs, Current.RexLeadMs, Current.QuickRexMs);
         }
         else
-        {
             logger.LogInformation("No simulation timing row found — using defaults");
-        }
     }
 
     /// <summary>Persist updated settings and refresh the in-memory cache.</summary>
-    public async Task<SimulationTimingSettings> UpdateAsync(SimulationTimingSettings dto)
+    public async Task<(SimulationTimingSettings? Result, string? Error)> UpdateAsync(SimulationTimingSettings dto)
     {
+        var validationError = TimingValidation.Validate(dto);
+        if (validationError is not null)
+            return (null, validationError);
+
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<DoorSimDbContext>();
 
@@ -46,17 +48,17 @@ public class SimulationSettingsService(
         }
 
         entity.CardToDoorDelayMs = dto.CardToDoorDelayMs;
-        entity.DoorOpenMs        = dto.DoorOpenMs;
-        entity.RexLeadMs         = dto.RexLeadMs;
-        entity.QuickRexMs        = dto.QuickRexMs;
+        entity.DoorOpenMs = dto.DoorOpenMs;
+        entity.RexLeadMs = dto.RexLeadMs;
+        entity.QuickRexMs = dto.QuickRexMs;
 
         await db.SaveChangesAsync().ConfigureAwait(false);
-        _current = entity.ToDto();
+        Current = entity.ToDto();
 
         logger.LogInformation(
             "Simulation timing updated — CardToDoor={C}ms DoorOpen={D}ms RexLead={R}ms QuickRex={Q}ms",
-            _current.CardToDoorDelayMs, _current.DoorOpenMs, _current.RexLeadMs, _current.QuickRexMs);
+            Current.CardToDoorDelayMs, Current.DoorOpenMs, Current.RexLeadMs, Current.QuickRexMs);
 
-        return _current;
+        return (Current, null);
     }
 }

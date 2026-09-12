@@ -1,3 +1,5 @@
+using DoorSim.Validation;
+
 namespace DoorSim.Services;
 
 /// <summary>CRUD service for the card library. Scoped — one instance per request.</summary>
@@ -5,8 +7,8 @@ public class CardLibraryService(DoorSimDbContext db)
 {
     public async Task<CardEntry[]> GetAllAsync() =>
         await db.Cards
-            .OrderBy(c => c.Label)
-            .Select(c => c.ToDto())
+            .OrderBy(p => p.Label)
+            .Select(p => p.ToDto())
             .ToArrayAsync()
             .ConfigureAwait(false);
 
@@ -16,8 +18,12 @@ public class CardLibraryService(DoorSimDbContext db)
         return entity?.ToDto();
     }
 
-    public async Task<CardEntry> CreateAsync(CardEntry dto)
+    public async Task<(CardEntry? Result, string? Error)> CreateAsync(CardEntry dto)
     {
+        var validationError = CardValidation.Validate(dto);
+        if (validationError is not null)
+            return (null, validationError);
+
         var entity = CardEntity.FromDto(dto);
         entity.Id = 0;
         entity.CreatedAt = DateTimeOffset.UtcNow;
@@ -25,15 +31,21 @@ public class CardLibraryService(DoorSimDbContext db)
         db.Cards.Add(entity);
         await db.SaveChangesAsync().ConfigureAwait(false);
 
-        return entity.ToDto();
+        return (entity.ToDto(), null);
     }
 
-    public async Task<CardEntry?> UpdateAsync(int id, CardEntry dto)
+    public async Task<(CardEntry? Result, string? Error)> UpdateAsync(int id, CardEntry dto)
     {
         var entity = await db.Cards.FindAsync(id).ConfigureAwait(false);
         if (entity is null)
         {
-            return null;
+            return (null, null);
+        }
+
+        var validationError = CardValidation.Validate(dto);
+        if (validationError is not null)
+        {
+            return (null, validationError);
         }
 
         entity.Label = dto.Label;
@@ -42,7 +54,7 @@ public class CardLibraryService(DoorSimDbContext db)
         entity.Format = dto.Format;
 
         await db.SaveChangesAsync().ConfigureAwait(false);
-        return entity.ToDto();
+        return (entity.ToDto(), null);
     }
 
     public async Task<bool> DeleteAsync(int id)

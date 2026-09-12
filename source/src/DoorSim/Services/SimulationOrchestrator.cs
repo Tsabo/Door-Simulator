@@ -1,7 +1,9 @@
+using System.Runtime.CompilerServices;
+
 namespace DoorSim.Services;
 
 /// <summary>
-/// Wires API endpoints to <see cref="IReaderBank"/>.
+/// Wires API endpoints to <see cref="IReaderBank" />.
 /// Tracks per-door status for UI feedback.
 /// Singleton — shares lifetime with the hardware bank.
 /// Creates a DI scope for each card lookup so it can safely consume the scoped CardLibraryService.
@@ -14,33 +16,32 @@ public class SimulationOrchestrator(
 {
     private readonly ConcurrentDictionary<int, SimulationStatus> _status = new();
 
+    /// <summary>All door IDs currently loaded in the simulator bank.</summary>
+    public IReadOnlyCollection<int> ActiveDoorIds => bank.ActiveDoorIds;
+
     // -------------------------------------------------------------------------
     // Library-backed send
     // -------------------------------------------------------------------------
 
     public async Task RunEventAsync(DoorEventRequest request)
     {
-        var simulator = bank.GetReader(request.ReaderId);
+        if (!bank.TryGetReader(request.ReaderId, out var simulator))
+            throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
+
         SetStatus(request.ReaderId, SimulationStatus.Running);
 
         try
         {
             var t = settings.Current;
             if (request.EventType == DoorEventType.EgressCycle)
-            {
                 await simulator.SimulateEgressCycleAsync(t.RexLeadMs, t.DoorOpenMs).ConfigureAwait(false);
-            }
             else
             {
                 var card = await ResolveCardAsync(request.CardEntryId, request.ReaderId).ConfigureAwait(false);
                 if (request.EventType == DoorEventType.CardReadOnly)
-                {
                     await simulator.SendCardAsync(card).ConfigureAwait(false);
-                }
                 else
-                {
                     await simulator.SimulateAccessCycleAsync(card, t.CardToDoorDelayMs, t.DoorOpenMs).ConfigureAwait(false);
-                }
             }
 
             SetStatus(request.ReaderId, SimulationStatus.Success);
@@ -61,7 +62,9 @@ public class SimulationOrchestrator(
 
     public async Task SendCardAsync(RawCardRequest request)
     {
-        var simulator = bank.GetReader(request.ReaderId);
+        if (!bank.TryGetReader(request.ReaderId, out var simulator))
+            throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
+
         SetStatus(request.ReaderId, SimulationStatus.Running);
 
         try
@@ -81,24 +84,20 @@ public class SimulationOrchestrator(
 
     public async Task RunRawEventAsync(RawDoorEventRequest request)
     {
-        var simulator = bank.GetReader(request.ReaderId);
+        if (!bank.TryGetReader(request.ReaderId, out var simulator))
+            throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
+
         SetStatus(request.ReaderId, SimulationStatus.Running);
 
         try
         {
             var t = settings.Current;
             if (request.EventType == DoorEventType.EgressCycle)
-            {
                 await simulator.SimulateEgressCycleAsync(t.RexLeadMs, t.DoorOpenMs).ConfigureAwait(false);
-            }
             else if (request.EventType == DoorEventType.CardReadOnly)
-            {
                 await simulator.SendCardAsync(request.CardNumber, request.FacilityCode, request.Format).ConfigureAwait(false);
-            }
             else
-            {
                 await simulator.SimulateAccessCycleAsync(request.CardNumber, request.FacilityCode, request.Format, t.CardToDoorDelayMs, t.DoorOpenMs).ConfigureAwait(false);
-            }
 
             SetStatus(request.ReaderId, SimulationStatus.Success);
         }
@@ -119,24 +118,30 @@ public class SimulationOrchestrator(
     public async Task OpenDoorAsync(int readerId)
     {
         try
-        { 
-            await bank.GetReader(readerId).OpenDoorAsync().ConfigureAwait(false);
+        {
+            if (bank.TryGetReader(readerId, out var simulator))
+                await simulator.OpenDoorAsync().ConfigureAwait(false);
+            else
+                logger.LogWarning("Reader {R}: open door ignored — reader not found in bank", readerId);
         }
-        catch (Exception ex) 
-        { 
-            logger.LogError(ex, "Reader {R}: open door failed", readerId); 
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Reader {R}: open door failed", readerId);
         }
     }
 
     public async Task CloseDoorAsync(int readerId)
     {
-        try 
-        { 
-            await bank.GetReader(readerId).CloseDoorAsync().ConfigureAwait(false); 
+        try
+        {
+            if (bank.TryGetReader(readerId, out var simulator))
+                await simulator.CloseDoorAsync().ConfigureAwait(false);
+            else
+                logger.LogWarning("Reader {R}: close door ignored — reader not found in bank", readerId);
         }
-        catch (Exception ex) 
-        { 
-            logger.LogError(ex, "Reader {R}: close door failed", readerId); 
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Reader {R}: close door failed", readerId);
         }
     }
 
@@ -145,14 +150,19 @@ public class SimulationOrchestrator(
     {
         try
         {
-            var sim = bank.GetReader(readerId);
+            if (!bank.TryGetReader(readerId, out var sim))
+            {
+                logger.LogWarning("Reader {R}: quick REX ignored — reader not found in bank", readerId);
+                return;
+            }
+
             await sim.TripRexAsync().ConfigureAwait(false);
             await Task.Delay(settings.Current.QuickRexMs).ConfigureAwait(false);
             await sim.ResetRexAsync().ConfigureAwait(false);
         }
-        catch (Exception ex) 
-        { 
-            logger.LogError(ex, "Reader {R}: quick REX failed", readerId); 
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Reader {R}: quick REX failed", readerId);
         }
     }
 
@@ -161,70 +171,44 @@ public class SimulationOrchestrator(
 
     /// <summary>Returns true if the reader's transport is connected and responding.</summary>
     /// <remarks>Always true for Wiegand. For OSDP, reflects the 8-second heartbeat window.</remarks>
-    public bool GetConnectivity(int readerId)
-    {
-        try 
-        { 
-            return bank.GetReader(readerId).IsConnected; 
-        }
-        catch (KeyNotFoundException) 
-        { 
-            return false; 
-        }
-    }
+    public bool GetConnectivity(int readerId) =>
+        bank.TryGetReader(readerId, out var sim) && sim.IsConnected;
 
     /// <summary>
     /// Returns the current LED/buzzer state as commanded by the panel.
     /// Only meaningful for OSDP readers; returns null for Wiegand.
     /// </summary>
-    public ReaderLedState? GetLedState(int readerId)
-    {
-        try 
-        { 
-            return bank.GetReader(readerId).LedState; 
-        }
-        catch (KeyNotFoundException) 
-        { 
-            return null; 
-        }
-    }
-
-    /// <summary>All door IDs currently loaded in the simulator bank.</summary>
-    public IReadOnlyCollection<int> ActiveDoorIds => bank.ActiveDoorIds;
+    public ReaderLedState? GetLedState(int readerId) =>
+        bank.TryGetReader(readerId, out var sim)
+            ? sim.LedState
+            : null;
 
     /// <summary>
     /// Snapshot of every active door's status and connectivity.
     /// Used by the SSE stream endpoint to push updates to clients.
     /// </summary>
     public DoorStatusUpdate[] GetAllStatuses() =>
-        [.. ActiveDoorIds.Select(id =>
+    [
+        .. ActiveDoorIds.Select(id =>
         {
-            IReaderSimulator? sim = null;
-            try 
-            { 
-                sim = bank.GetReader(id); 
-            } 
-            catch (KeyNotFoundException)
-            {
-                // Door was removed from the bank since we enumerated ActiveDoorIds.
-            }
+            bank.TryGetReader(id, out var sim);
 
             return new DoorStatusUpdate(
                 id,
                 GetStatus(id),
                 GetConnectivity(id),
                 GetLedState(id),
-                sim?.IsDoorOpen  ?? false,
+                sim?.IsDoorOpen ?? false,
                 sim?.IsRexActive ?? false);
-        })];
+        }),
+    ];
 
     /// <summary>
     /// Async stream that yields a status snapshot for all doors every
-    /// <paramref name="intervalMs"/> milliseconds until cancelled.
+    /// <paramref name="intervalMs" /> milliseconds until cancelled.
     /// </summary>
-    public async IAsyncEnumerable<DoorStatusUpdate[]> StreamStatusAsync(
-        int intervalMs = 500,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<DoorStatusUpdate[]> StreamStatusAsync(int intervalMs = 500,
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -250,14 +234,12 @@ public class SimulationOrchestrator(
     private async Task<CardEntry> ResolveCardAsync(int? cardEntryId, int readerId)
     {
         if (cardEntryId is null)
-        {
             throw new InvalidOperationException($"Reader {readerId}: CardEntryId is required for this event type.");
-        }
 
         await using var scope = scopeFactory.CreateAsyncScope();
         var cards = scope.ServiceProvider.GetRequiredService<CardLibraryService>();
 
         return await cards.GetAsync(cardEntryId.Value).ConfigureAwait(false)
-            ?? throw new KeyNotFoundException($"Card {cardEntryId} not found in library.");
+               ?? throw new KeyNotFoundException($"Card {cardEntryId} not found in library.");
     }
 }
