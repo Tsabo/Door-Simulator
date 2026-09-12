@@ -50,7 +50,7 @@ public class SimulatorBankLookupTests
         var services = new ServiceCollection().BuildServiceProvider();
         var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
         var settings = new SimulationSettingsService(scopeFactory, NullLogger<SimulationSettingsService>.Instance);
-        var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, NullLogger<SimulationOrchestrator>.Instance);
+        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, NullLogger<SimulationOrchestrator>.Instance);
 
         var isConnected = orchestrator.GetConnectivity(999);
         await Assert.That(isConnected).IsFalse();
@@ -63,7 +63,7 @@ public class SimulatorBankLookupTests
         var services = new ServiceCollection().BuildServiceProvider();
         var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
         var settings = new SimulationSettingsService(scopeFactory, NullLogger<SimulationSettingsService>.Instance);
-        var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, NullLogger<SimulationOrchestrator>.Instance);
+        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, NullLogger<SimulationOrchestrator>.Instance);
 
         var led = orchestrator.GetLedState(999);
         await Assert.That(led).IsNull();

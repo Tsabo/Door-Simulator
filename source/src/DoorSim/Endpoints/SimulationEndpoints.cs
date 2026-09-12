@@ -199,6 +199,45 @@ public static class SimulationEndpoints
                              "single persistent connection — use this instead of polling /status and /connectivity per " +
                              "reader.");
 
+        // Queue inspection and management
+        group.MapGet("/queue/{readerId:int}", (int readerId, SimulationOrchestrator orchestrator, IReaderBank bank) =>
+            {
+                if (!bank.ContainsReader(readerId))
+                    return Results.NotFound($"Reader {readerId} not found in the active bank.");
+
+                return Results.Ok(orchestrator.GetQueue(readerId));
+            })
+            .WithName("GetReaderQueue")
+            .WithSummary("Get the list of active and pending simulation items in a reader's queue.")
+            .Produces<SimulationQueueItemDto[]>()
+            .Produces<string>(StatusCodes.Status404NotFound);
+
+        group.MapDelete("/queue/{readerId:int}", (int readerId, SimulationOrchestrator orchestrator, IReaderBank bank) =>
+            {
+                if (!bank.ContainsReader(readerId))
+                    return Results.NotFound($"Reader {readerId} not found in the active bank.");
+
+                orchestrator.ClearQueue(readerId);
+                return Results.NoContent();
+            })
+            .WithName("ClearReaderQueue")
+            .WithSummary("Clear all pending items from a reader's simulation queue.")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces<string>(StatusCodes.Status404NotFound);
+
+        group.MapDelete("/queue/{readerId:int}/{itemId:guid}", (int readerId, Guid itemId, SimulationOrchestrator orchestrator, IReaderBank bank) =>
+            {
+                if (!bank.ContainsReader(readerId))
+                    return Results.NotFound($"Reader {readerId} not found in the active bank.");
+
+                var cancelled = orchestrator.CancelQueueItem(readerId, itemId);
+                return cancelled ? Results.NoContent() : Results.NotFound($"Queue item {itemId} not found for reader {readerId}.");
+            })
+            .WithName("CancelReaderQueueItem")
+            .WithSummary("Cancel a specific simulation item in a reader's queue.")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces<string>(StatusCodes.Status404NotFound);
+
         return app;
     }
 }

@@ -55,6 +55,21 @@ public class SimulationApiClient(HttpClient http)
     public async Task<bool> GetConnectivityAsync(int readerId) =>
         await http.GetFromJsonAsync<bool>($"/api/simulate/connectivity/{readerId}", DoorSimJson.Options);
 
+    public async Task<SimulationQueueItemDto[]> GetQueueAsync(int readerId) =>
+        await http.GetFromJsonAsync<SimulationQueueItemDto[]>($"/api/simulate/queue/{readerId}", DoorSimJson.Options) ?? [];
+
+    public async Task ClearQueueAsync(int readerId)
+    {
+        var response = await http.DeleteAsync($"/api/simulate/queue/{readerId}");
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task CancelQueueItemAsync(int readerId, Guid itemId)
+    {
+        var response = await http.DeleteAsync($"/api/simulate/queue/{readerId}/{itemId}");
+        response.EnsureSuccessStatusCode();
+    }
+
     /// <summary>
     /// Opens a persistent SSE connection and yields status snapshots as they arrive.
     /// Reconnects automatically on transient errors after a 2-second delay.

@@ -1,0 +1,87 @@
+@inject SimulationApiClient Sim
+@implements IAsyncDisposable
+
+<MudDialog>
+    <DialogContent>
+        @if (_loading)
+        {
+            <div class="d-flex justify-center my-4">
+                <MudProgressCircular Indeterminate="true" Size="Size.Medium" Color="Color.Primary" />
+            </div>
+        }
+        else if (_items.Length == 0)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="my-2">
+                The simulation queue for this reader is currently empty.
+            </MudAlert>
+        }
+        else
+        {
+            <MudTable Items="_items" Dense="true" Hover="true" Class="my-2" Elevation="0">
+                <HeaderContent>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Action</MudTh>
+                    <MudTh>Enqueued</MudTh>
+                    <MudTh Style="text-align: right;">Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Status">
+                        @if (context.IsRunning)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
+                                     Icon="@Icons.Material.Filled.PlayArrow">
+                                Running
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined"
+                                     Icon="@Icons.Material.Filled.Schedule">
+                                Pending
+                            </MudChip>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Action">
+                        <MudText Typo="Typo.body2">@context.Description</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Enqueued">
+                        <MudText Typo="Typo.caption">@context.EnqueuedAt.ToLocalTime().ToString("HH:mm:ss.fff")</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Actions" Style="text-align: right;">
+                        <MudIconButton Icon="@Icons.Material.Filled.Cancel"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       title="Cancel this item"
+                                       OnClick="@(() => CancelItemAsync(context.Id))" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (_items.Length > 0)
+        {
+            <MudButton Color="Color.Error"
+                       Variant="Variant.Outlined"
+                       Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.ClearAll"
+                       OnClick="ClearAllAsync"
+                       Disabled="_loading">
+                Clear Pending
+            </MudButton>
+        }
+        <MudSpacer />
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Text"
+                   OnClick="RefreshAsync"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   Disabled="_loading">
+            Refresh
+        </MudButton>
+        <MudButton Color="Color.Default"
+                   Variant="Variant.Filled"
+                   OnClick="Close">
+            Close
+        </MudButton>
+    </DialogActions>
+</MudDialog>

@@ -11,15 +11,15 @@ public static class DoorsEndpoints
             .WithName("GetAvailableSerialPorts")
             .WithSummary("List serial ports available for a new OSDP or Modbus RTU door.")
             .WithDescription("Scans /dev/tty* (ttyRS485*, ttyACM*, ttyAMA*, ttyUSB*, ttyS*) and excludes ports " +
-                "already claimed by other doors. Pass excludeDoorId when editing an existing door so its own " +
-                "current port isn't excluded from the list.")
-            .Produces<string[]>(StatusCodes.Status200OK);
+                             "already claimed by other doors. Pass excludeDoorId when editing an existing door so its own " +
+                             "current port isn't excluded from the list.")
+            .Produces<string[]>();
 
         group.MapGet("/", async (DoorConfigService svc) =>
                 Results.Ok(await svc.GetAllAsync()))
             .WithName("GetDoors")
             .WithSummary("List all configured doors.")
-            .Produces<DoorConfiguration[]>(StatusCodes.Status200OK);
+            .Produces<DoorConfiguration[]>();
 
         group.MapGet("/{id:int}", async (int id, DoorConfigService svc) =>
             {
@@ -30,7 +30,7 @@ public static class DoorsEndpoints
             })
             .WithName("GetDoor")
             .WithSummary("Get a single door's configuration by ID.")
-            .Produces<DoorConfiguration>(StatusCodes.Status200OK)
+            .Produces<DoorConfiguration>()
             .Produces(StatusCodes.Status404NotFound);
 
         group.MapPost("/", async (DoorConfiguration dto, DoorConfigService svc, DynamicSimulatorBank bank) =>
@@ -45,8 +45,8 @@ public static class DoorsEndpoints
             .WithName("CreateDoor")
             .WithSummary("Create a new door configuration.")
             .WithDescription("Validates GPIO pin and Modbus channel uniqueness across all doors before saving. " +
-                "On success, the running simulator bank immediately starts simulating the new door — no restart " +
-                "needed.")
+                             "On success, the running simulator bank immediately starts simulating the new door — no restart " +
+                             "needed.")
             .Produces<DoorConfiguration>(StatusCodes.Status201Created)
             .Produces<string>(StatusCodes.Status400BadRequest);
 
@@ -65,24 +65,25 @@ public static class DoorsEndpoints
             .WithName("UpdateDoor")
             .WithSummary("Update an existing door's configuration.")
             .WithDescription("Re-validates pin/channel uniqueness and rebuilds the door's simulator in the " +
-                "running bank immediately — no restart needed.")
-            .Produces<DoorConfiguration>(StatusCodes.Status200OK)
+                             "running bank immediately — no restart needed.")
+            .Produces<DoorConfiguration>()
             .Produces<string>(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);
 
-        group.MapDelete("/{id:int}", async (int id, DoorConfigService svc, DynamicSimulatorBank bank) =>
+        group.MapDelete("/{id:int}", async (int id, DoorConfigService svc, DynamicSimulatorBank bank, SimulationOrchestrator orchestrator) =>
             {
                 var deleted = await svc.DeleteAsync(id);
                 if (!deleted)
                     return Results.NotFound();
 
                 await bank.RemoveDoor(id);
+                await orchestrator.RemoveReaderQueueAsync(id);
                 return Results.NoContent();
             })
             .WithName("DeleteDoor")
             .WithSummary("Delete a door configuration.")
             .WithDescription("Removes the door from the running simulator bank and disposes its simulator " +
-                "(releasing the OSDP serial port, if any).")
+                             "(releasing the OSDP serial port, if any).")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
 

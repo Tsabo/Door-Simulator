@@ -2,6 +2,7 @@
 @inject SimulationApiClient Sim
 @inject CardApiClient Cards
 @inject DoorApiClient Doors
+@inject IDialogService Dialog
 @implements IAsyncDisposable
 
 <PageTitle>Reader Panel — DoorSim</PageTitle>
@@ -34,7 +35,14 @@ else
                 <MudCard>
                     <MudCardHeader>
                         <CardHeaderContent>
-                            <MudText Typo="Typo.body1">@door.Label</MudText>
+                            <div class="d-flex align-center justify-space-between">
+                                <MudText Typo="Typo.body1">@door.Label</MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.FormatListNumbered"
+                                               Size="Size.Small"
+                                               Color="@(_queueDepths.TryGetValue(doorId, out var qd) && qd > 0 ? Color.Info : Color.Default)"
+                                               title="View simulation queue"
+                                               OnClick="@(() => OpenQueueDialogAsync(doorId, door.Label))" />
+                            </div>
                         </CardHeaderContent>
                     </MudCardHeader>
 
@@ -48,7 +56,7 @@ else
                                     <MockReader Label="@door.Label"
                                                 Protocol="@door.Protocol"
                                                 IsConnected="@(_connectivity.TryGetValue(doorId, out var conn) && conn)"
-                                                LedState="@(_ledStates.TryGetValue(doorId, out var led) ? led : null)"
+                                                LedState="@(_ledStates.GetValueOrDefault(doorId))"
                                                 SimStatus="@_statuses[doorId]" />
 
                                     <MudStack Spacing="1" Style="flex-wrap: wrap; align-content: flex-start;">
@@ -72,8 +80,25 @@ else
                                                 @(connected ? "Connected" : "Disconnected")
                                             </MudChip>
                                         }
+                                        @if (_queueDepths.TryGetValue(doorId, out var qDepth) && qDepth > 0)
+                                        {
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color="Color.Info"
+                                                     Variant="Variant.Filled"
+                                                     Icon="@Icons.Material.Filled.FormatListNumbered"
+                                                     OnClick="@(() => OpenQueueDialogAsync(doorId, door.Label))"
+                                                     Style="cursor: pointer;">
+                                                Queue: @qDepth
+                                            </MudChip>
+                                        }
                                     </MudStack>
                                 </div>
+                                @if (_currentActions.TryGetValue(doorId, out var currentAction) && !string.IsNullOrWhiteSpace(currentAction) && _statuses[doorId] == SimulationStatus.Running)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block text-truncate" Style="max-width: 220px;" title="@currentAction">
+                                        @currentAction
+                                    </MudText>
+                                }
                             </div>
 
                             @* Door + REX (only when DPS is configured) *@
@@ -176,171 +201,4 @@ else
             </MudItem>
         }
     </MudGrid>
-}
-
-@code {
-    private DoorConfiguration[] _doors = [];
-    private CardEntry[]         _cards = [];
-    private bool _loading = true;
-
-    private Dictionary<int, SimulationStatus> _statuses     = [];
-    private Dictionary<int, bool>             _connectivity = [];
-    private Dictionary<int, ReaderLedState?>  _ledStates    = [];
-    private Dictionary<int, int>              _selectedCard = [];
-    private Dictionary<int, string?>          _errors       = [];
-    private Dictionary<int, bool>             _doorOpen     = [];
-    private Dictionary<int, bool>             _rexActive    = [];
-
-    private CancellationTokenSource _cts = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        try
-        {
-            var doorsTask = Doors.GetAllAsync();
-            var cardsTask = Cards.GetAllAsync();
-            await Task.WhenAll(doorsTask, cardsTask);
-            _doors = doorsTask.Result;
-            _cards = cardsTask.Result;
-
-            foreach (var door in _doors)
-            {
-                _statuses[door.Id]     = SimulationStatus.Idle;
-                _connectivity[door.Id] = false;
-                _ledStates[door.Id]    = null;
-                _selectedCard[door.Id] = _cards.Length > 0 ? _cards[0].Id : 0;
-                _errors[door.Id]       = null;
-                _doorOpen[door.Id]     = false;
-                _rexActive[door.Id]    = false;
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error initializing reader panel: {ex.Message}");
-        }
-        finally
-        {
-            _loading = false;
-        }
-
-        _ = SubscribeToStatusStreamAsync(_cts.Token);
-    }
-
-    // ── SSE stream ───────────────────────────────────────────────────────────
-
-    private async Task SubscribeToStatusStreamAsync(CancellationToken ct)
-    {
-        try
-        {
-            await foreach (var updates in Sim.SubscribeAsync(ct))
-            {
-                foreach (var u in updates)
-                {
-                    if (_statuses.ContainsKey(u.DoorId))     _statuses[u.DoorId]     = u.Status;
-                    if (_connectivity.ContainsKey(u.DoorId)) _connectivity[u.DoorId] = u.IsConnected;
-                    if (_ledStates.ContainsKey(u.DoorId))    _ledStates[u.DoorId]    = u.LedState;
-                    if (_doorOpen.ContainsKey(u.DoorId))     _doorOpen[u.DoorId]     = u.DoorIsOpen;
-                    if (_rexActive.ContainsKey(u.DoorId))    _rexActive[u.DoorId]    = u.RexIsActive;
-                }
-                await InvokeAsync(StateHasChanged);
-            }
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Status stream subscription error: {ex.Message}");
-        }
-    }
-
-    // ── Simulation events ────────────────────────────────────────────────────
-
-    private async Task SendEventAsync(int doorId, DoorEventType eventType)
-    {
-        _errors[doorId] = null;
-        try
-        {
-            var cardId = _selectedCard[doorId];
-            if (cardId == 0 && eventType != DoorEventType.EgressCycle)
-            {
-                _errors[doorId] = "Select a card first.";
-                return;
-            }
-
-            var request = new DoorEventRequest(doorId, eventType,
-                eventType == DoorEventType.EgressCycle ? null : cardId);
-
-            await Sim.RunEventAsync(request);
-        }
-        catch (Exception ex)
-        {
-            _errors[doorId] = ex.Message;
-        }
-    }
-
-    // ── Direct DPS / REX control ─────────────────────────────────────────────
-
-    private async Task ToggleDoorAsync(int doorId)
-    {
-        _errors[doorId] = null;
-        var wasOpen = _doorOpen.TryGetValue(doorId, out var o) && o;
-        _doorOpen[doorId] = !wasOpen;  // optimistic — stream confirms within 500 ms
-        try
-        {
-            if (!wasOpen)
-                await Sim.OpenDoorAsync(doorId);
-            else
-                await Sim.CloseDoorAsync(doorId);
-        }
-        catch (Exception ex)
-        {
-            _doorOpen[doorId] = wasOpen;
-            _errors[doorId]   = ex.Message;
-        }
-    }
-
-    private async Task TriggerRexAsync(int doorId)
-    {
-        _errors[doorId] = null;
-        try
-        {
-            await Sim.QuickRexAsync(doorId);
-        }
-        catch (Exception ex)
-        {
-            _errors[doorId] = ex.Message;
-        }
-    }
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
-
-    private static bool HasDps(DoorConfiguration door) =>
-        door.DpsPin.HasValue || door.DpsModbusChannel.HasValue;
-
-    private static bool HasRex(DoorConfiguration door) =>
-        door.RexPin.HasValue || door.RexModbusChannel.HasValue;
-
-    private bool IsBusy(int doorId) =>
-        _statuses.TryGetValue(doorId, out var s) && s == SimulationStatus.Running;
-
-    private static Color StatusColor(SimulationStatus status) => status switch
-    {
-        SimulationStatus.Running => Color.Warning,
-        SimulationStatus.Success => Color.Success,
-        SimulationStatus.Error   => Color.Error,
-        _                        => Color.Default,
-    };
-
-    private static string StatusIcon(SimulationStatus status) => status switch
-    {
-        SimulationStatus.Running => Icons.Material.Filled.Schedule,
-        SimulationStatus.Success => Icons.Material.Filled.CheckCircle,
-        SimulationStatus.Error   => Icons.Material.Filled.Error,
-        _                        => Icons.Material.Filled.HourglassEmpty,
-    };
-
-    public async ValueTask DisposeAsync()
-    {
-        await _cts.CancelAsync();
-        _cts.Dispose();
-    }
 }

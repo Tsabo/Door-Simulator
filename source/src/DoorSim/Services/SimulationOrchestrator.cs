@@ -4,7 +4,7 @@ namespace DoorSim.Services;
 
 /// <summary>
 /// Wires API endpoints to <see cref="IReaderBank" />.
-/// Tracks per-door status for UI feedback.
+/// Tracks per-door status and per-door serialized work queues for UI feedback and concurrency safety.
 /// Singleton — shares lifetime with the hardware bank.
 /// Creates a DI scope for each card lookup so it can safely consume the scoped CardLibraryService.
 /// </summary>
@@ -12,125 +12,124 @@ public class SimulationOrchestrator(
     IReaderBank bank,
     IServiceScopeFactory scopeFactory,
     SimulationSettingsService settings,
-    ILogger<SimulationOrchestrator> logger)
+    ILogger<SimulationOrchestrator> logger) : IAsyncDisposable
 {
+    private readonly ConcurrentDictionary<int, ReaderWorkQueue> _queues = new();
     private readonly ConcurrentDictionary<int, SimulationStatus> _status = new();
 
     /// <summary>All door IDs currently loaded in the simulator bank.</summary>
     public IReadOnlyCollection<int> ActiveDoorIds => bank.ActiveDoorIds;
 
+    public async ValueTask DisposeAsync()
+    {
+        foreach (var queue in _queues.Values)
+            await queue.DisposeAsync().ConfigureAwait(false);
+
+        _queues.Clear();
+        _status.Clear();
+    }
+
     // -------------------------------------------------------------------------
     // Library-backed send
     // -------------------------------------------------------------------------
 
-    public async Task RunEventAsync(DoorEventRequest request)
+    public async Task RunEventAsync(DoorEventRequest request, CancellationToken ct = default)
     {
         if (!bank.TryGetReader(request.ReaderId, out var simulator))
             throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
 
-        SetStatus(request.ReaderId, SimulationStatus.Running);
+        CardEntry? card = null;
+        if (request.EventType != DoorEventType.EgressCycle)
+            card = await ResolveCardAsync(request.CardEntryId, request.ReaderId).ConfigureAwait(false);
 
-        try
+        var description = request.EventType switch
         {
-            var t = settings.Current;
-            if (request.EventType == DoorEventType.EgressCycle)
-                await simulator.SimulateEgressCycleAsync(t.RexLeadMs, t.DoorOpenMs).ConfigureAwait(false);
-            else
+            DoorEventType.EgressCycle => "Egress Cycle",
+            DoorEventType.AccessCycle => $"Access Cycle ({card?.Label ?? $"#{card?.CardNumber}"})",
+            var _ => $"Card Read ({card?.Label ?? $"#{card?.CardNumber}"})",
+        };
+
+        var queue = GetOrCreateQueue(request.ReaderId);
+        await queue.EnqueueAsync(async itemCt =>
             {
-                var card = await ResolveCardAsync(request.CardEntryId, request.ReaderId).ConfigureAwait(false);
-                if (request.EventType == DoorEventType.CardReadOnly)
-                    await simulator.SendCardAsync(card).ConfigureAwait(false);
+                itemCt.ThrowIfCancellationRequested();
+                var t = settings.Current;
+
+                if (request.EventType == DoorEventType.EgressCycle)
+                    await simulator.SimulateEgressCycleAsync(t.RexLeadMs, t.DoorOpenMs).ConfigureAwait(false);
                 else
-                    await simulator.SimulateAccessCycleAsync(card, t.CardToDoorDelayMs, t.DoorOpenMs).ConfigureAwait(false);
-            }
-
-            SetStatus(request.ReaderId, SimulationStatus.Success);
-        }
-        catch (Exception ex)
-        {
-            SetStatus(request.ReaderId, SimulationStatus.Error);
-            logger.LogError(ex, "Reader {R}: simulation failed", request.ReaderId);
-        }
-
-        await Task.Delay(1500);
-        SetStatus(request.ReaderId, SimulationStatus.Idle);
+                {
+                    if (request.EventType == DoorEventType.CardReadOnly)
+                        await simulator.SendCardAsync(card!).ConfigureAwait(false);
+                    else
+                        await simulator.SimulateAccessCycleAsync(card!, t.CardToDoorDelayMs, t.DoorOpenMs).ConfigureAwait(false);
+                }
+            }, description, request.EventType, ct)
+            .ConfigureAwait(false);
     }
 
     // -------------------------------------------------------------------------
     // Raw value send (no library lookup)
     // -------------------------------------------------------------------------
 
-    public async Task SendCardAsync(RawCardRequest request)
+    public async Task SendCardAsync(RawCardRequest request, CancellationToken ct = default)
     {
         if (!bank.TryGetReader(request.ReaderId, out var simulator))
             throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
 
-        SetStatus(request.ReaderId, SimulationStatus.Running);
+        var description = $"Raw Card {request.Format} FC:{request.FacilityCode} #{request.CardNumber}";
+        var queue = GetOrCreateQueue(request.ReaderId);
 
-        try
-        {
-            await simulator.SendCardAsync(request.CardNumber, request.FacilityCode, request.Format).ConfigureAwait(false);
-            SetStatus(request.ReaderId, SimulationStatus.Success);
-        }
-        catch (Exception ex)
-        {
-            SetStatus(request.ReaderId, SimulationStatus.Error);
-            logger.LogError(ex, "Reader {R}: raw send failed", request.ReaderId);
-        }
-
-        await Task.Delay(1500);
-        SetStatus(request.ReaderId, SimulationStatus.Idle);
-    }
-
-    public async Task SendBitsAsync(RawBitsRequest request)
-    {
-        if (!bank.TryGetReader(request.ReaderId, out var simulator))
-            throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
-
-        SetStatus(request.ReaderId, SimulationStatus.Running);
-
-        try
-        {
-            await simulator.SendBitsAsync(request.Bits).ConfigureAwait(false);
-            SetStatus(request.ReaderId, SimulationStatus.Success);
-        }
-        catch (Exception ex)
-        {
-            SetStatus(request.ReaderId, SimulationStatus.Error);
-            logger.LogError(ex, "Reader {R}: raw bits send failed", request.ReaderId);
-        }
-
-        await Task.Delay(1500);
-        SetStatus(request.ReaderId, SimulationStatus.Idle);
-    }
-
-    public async Task RunRawEventAsync(RawDoorEventRequest request)
-    {
-        if (!bank.TryGetReader(request.ReaderId, out var simulator))
-            throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
-
-        SetStatus(request.ReaderId, SimulationStatus.Running);
-
-        try
-        {
-            var t = settings.Current;
-            if (request.EventType == DoorEventType.EgressCycle)
-                await simulator.SimulateEgressCycleAsync(t.RexLeadMs, t.DoorOpenMs).ConfigureAwait(false);
-            else if (request.EventType == DoorEventType.CardReadOnly)
+        await queue.EnqueueAsync(async itemCt =>
+            {
+                itemCt.ThrowIfCancellationRequested();
                 await simulator.SendCardAsync(request.CardNumber, request.FacilityCode, request.Format).ConfigureAwait(false);
-            else
-                await simulator.SimulateAccessCycleAsync(request.CardNumber, request.FacilityCode, request.Format, t.CardToDoorDelayMs, t.DoorOpenMs).ConfigureAwait(false);
+            }, description, DoorEventType.CardReadOnly, ct)
+            .ConfigureAwait(false);
+    }
 
-            SetStatus(request.ReaderId, SimulationStatus.Success);
-        }
-        catch (Exception ex)
+    public async Task SendBitsAsync(RawBitsRequest request, CancellationToken ct = default)
+    {
+        if (!bank.TryGetReader(request.ReaderId, out var simulator))
+            throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
+
+        var description = $"Raw Bits ({request.Bits.Length} bits)";
+        var queue = GetOrCreateQueue(request.ReaderId);
+
+        await queue.EnqueueAsync(async itemCt =>
+            {
+                itemCt.ThrowIfCancellationRequested();
+                await simulator.SendBitsAsync(request.Bits).ConfigureAwait(false);
+            }, description, DoorEventType.CardReadOnly, ct)
+            .ConfigureAwait(false);
+    }
+
+    public async Task RunRawEventAsync(RawDoorEventRequest request, CancellationToken ct = default)
+    {
+        if (!bank.TryGetReader(request.ReaderId, out var simulator))
+            throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
+
+        var description = request.EventType switch
         {
-            SetStatus(request.ReaderId, SimulationStatus.Error);
-            logger.LogError(ex, "Reader {R}: raw event failed", request.ReaderId);
-        }
+            DoorEventType.EgressCycle => "Raw Egress Cycle",
+            DoorEventType.AccessCycle => $"Raw Access Cycle ({request.Format} FC:{request.FacilityCode} #{request.CardNumber})",
+            var _ => $"Raw Card Read ({request.Format} FC:{request.FacilityCode} #{request.CardNumber})",
+        };
 
-        await Task.Delay(1500);
-        SetStatus(request.ReaderId, SimulationStatus.Idle);
+        var queue = GetOrCreateQueue(request.ReaderId);
+        await queue.EnqueueAsync(async itemCt =>
+            {
+                itemCt.ThrowIfCancellationRequested();
+                var t = settings.Current;
+
+                if (request.EventType == DoorEventType.EgressCycle)
+                    await simulator.SimulateEgressCycleAsync(t.RexLeadMs, t.DoorOpenMs).ConfigureAwait(false);
+                else if (request.EventType == DoorEventType.CardReadOnly)
+                    await simulator.SendCardAsync(request.CardNumber, request.FacilityCode, request.Format).ConfigureAwait(false);
+                else
+                    await simulator.SimulateAccessCycleAsync(request.CardNumber, request.FacilityCode, request.Format, t.CardToDoorDelayMs, t.DoorOpenMs).ConfigureAwait(false);
+            }, description, request.EventType, ct)
+            .ConfigureAwait(false);
     }
 
     // -------------------------------------------------------------------------
@@ -206,7 +205,7 @@ public class SimulationOrchestrator(
             : null;
 
     /// <summary>
-    /// Snapshot of every active door's status and connectivity.
+    /// Snapshot of every active door's status, queue depth, active action, queue snapshot, and connectivity.
     /// Used by the SSE stream endpoint to push updates to clients.
     /// </summary>
     public DoorStatusUpdate[] GetAllStatuses() =>
@@ -214,6 +213,7 @@ public class SimulationOrchestrator(
         .. ActiveDoorIds.Select(id =>
         {
             bank.TryGetReader(id, out var sim);
+            _queues.TryGetValue(id, out var queue);
 
             return new DoorStatusUpdate(
                 id,
@@ -221,7 +221,10 @@ public class SimulationOrchestrator(
                 GetConnectivity(id),
                 GetLedState(id),
                 sim?.IsDoorOpen ?? false,
-                sim?.IsRexActive ?? false);
+                sim?.IsRexActive ?? false,
+                queue?.QueueDepth ?? 0,
+                queue?.CurrentAction,
+                queue?.GetSnapshot() ?? []);
         }),
     ];
 
@@ -247,8 +250,43 @@ public class SimulationOrchestrator(
     }
 
     // -------------------------------------------------------------------------
+    // Queue management & inspection
+    // -------------------------------------------------------------------------
+
+    /// <summary>Gets a snapshot of items in the reader's processing queue.</summary>
+    public IReadOnlyList<SimulationQueueItemDto> GetQueue(int readerId) =>
+        _queues.TryGetValue(readerId, out var queue)
+            ? queue.GetSnapshot()
+            : [];
+
+    /// <summary>Cancels a specific queue item for a reader.</summary>
+    public bool CancelQueueItem(int readerId, Guid itemId) =>
+        _queues.TryGetValue(readerId, out var queue) && queue.TryCancel(itemId);
+
+    /// <summary>Clears all pending (not-yet-running) queue items for a reader.</summary>
+    public int ClearQueue(int readerId) =>
+        _queues.TryGetValue(readerId, out var queue)
+            ? queue.ClearPending()
+            : 0;
+
+    /// <summary>Removes and disposes a reader's queue when a door is removed.</summary>
+    public async ValueTask RemoveReaderQueueAsync(int readerId)
+    {
+        if (_queues.TryRemove(readerId, out var queue))
+            await queue.DisposeAsync().ConfigureAwait(false);
+
+        _status.TryRemove(readerId, out var _);
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private ReaderWorkQueue GetOrCreateQueue(int readerId) =>
+        _queues.GetOrAdd(readerId, id => new ReaderWorkQueue(
+            id,
+            SetStatus,
+            logger));
 
     private void SetStatus(int readerId, SimulationStatus status) =>
         _status[readerId] = status;
