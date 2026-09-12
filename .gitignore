@@ -224,6 +224,7 @@ FodyWeavers.xsd
 
 # CodeQL
 codeql-db/
+codeql-db-*/
 
 # =============================================================================
 # BUILD SYSTEMS
