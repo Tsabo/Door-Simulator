@@ -10,29 +10,31 @@ namespace DoorSim.Services;
 /// </summary>
 public sealed class ReaderWorkQueue : IAsyncDisposable
 {
-    private readonly int _readerId;
-    private readonly ILogger _logger;
-    private readonly Action<int, SimulationStatus> _statusCallback;
     private readonly Channel<SimulationWorkItem> _channel;
-    private readonly Task _processingTask;
-    private readonly CancellationTokenSource _shutdownCts = new();
     private readonly Lock _lock = new();
+    private readonly ILogger _logger;
+    private readonly Action<SimulationEventRecord>? _onCompleted;
 
     private readonly List<SimulationWorkItem> _pendingItems = [];
+    private readonly Task _processingTask;
+    private readonly int _readerId;
+    private readonly CancellationTokenSource _shutdownCts = new();
+    private readonly Action<int, SimulationStatus> _statusCallback;
     private SimulationWorkItem? _runningItem;
 
-    public ReaderWorkQueue(
-        int readerId,
+    public ReaderWorkQueue(int readerId,
         Action<int, SimulationStatus> statusCallback,
-        ILogger logger)
+        ILogger logger,
+        Action<SimulationEventRecord>? onCompleted = null)
     {
         _readerId = readerId;
         _statusCallback = statusCallback;
+        _onCompleted = onCompleted;
         _logger = logger;
         _channel = Channel.CreateUnbounded<SimulationWorkItem>(new UnboundedChannelOptions
         {
             SingleReader = true,
-            SingleWriter = false
+            SingleWriter = false,
         });
 
         _processingTask = Task.Run(ProcessQueueAsync);
@@ -45,7 +47,9 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
         {
             lock (_lock)
             {
-                return (_runningItem is not null ? 1 : 0) + _pendingItems.Count;
+                return (_runningItem is not null
+                    ? 1
+                    : 0) + _pendingItems.Count;
             }
         }
     }
@@ -62,23 +66,45 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
         }
     }
 
+    public async ValueTask DisposeAsync()
+    {
+        _channel.Writer.TryComplete();
+        await _shutdownCts.CancelAsync().ConfigureAwait(false);
+
+        try
+        {
+            await _processingTask.ConfigureAwait(false);
+        }
+        catch
+        {
+            // Ignore exceptions during teardown
+        }
+
+        _shutdownCts.Dispose();
+    }
+
     /// <summary>
     /// Enqueues a simulation work item and returns a Task that completes when the item finishes executing.
     /// </summary>
-    public Task EnqueueAsync(
-        Func<CancellationToken, Task> work,
+    public Task EnqueueAsync(Func<CancellationToken, Task> work,
         string description,
         DoorEventType? eventType = null,
-        CancellationToken callerCt = default)
+        CancellationToken callerCt = default,
+        SimulationEventContext? telemetry = null)
     {
         var item = new SimulationWorkItem(
             _readerId,
             description,
             eventType,
-            work);
+            work,
+            telemetry);
 
         lock (_lock)
         {
+            item.QueueDepthAtEnqueue = (_runningItem is not null
+                ? 1
+                : 0) + _pendingItems.Count;
+
             _pendingItems.Add(item);
         }
 
@@ -96,6 +122,7 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
             {
                 _pendingItems.Remove(item);
             }
+
             item.Tcs.TrySetException(new InvalidOperationException($"Queue for reader {_readerId} is closed."));
         }
 
@@ -118,7 +145,7 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
                     _runningItem.Description,
                     _runningItem.EventType,
                     _runningItem.EnqueuedAt,
-                    IsRunning: true));
+                    true));
             }
 
             foreach (var item in _pendingItems)
@@ -129,7 +156,7 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
                     item.Description,
                     item.EventType,
                     item.EnqueuedAt,
-                    IsRunning: false));
+                    false));
             }
 
             return result;
@@ -238,6 +265,8 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
                         _shutdownCts.Token, item.Cts.Token);
 
                     Exception? workException = null;
+                    var startedAt = DateTimeOffset.UtcNow;
+                    var startTicks = Stopwatch.GetTimestamp();
 
                     try
                     {
@@ -262,6 +291,8 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
                         {
                             _runningItem = null;
                         }
+
+                        RecordCompletion(item, startedAt, Stopwatch.GetElapsedTime(startTicks), workException);
                     }
 
                     if (workException is OperationCanceledException)
@@ -271,7 +302,7 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
                     else
                         item.Tcs.TrySetResult(true);
 
-                    // If more items are waiting, loop immediately. Otherwise give a short moment to display Success/Error
+                    // If more items are waiting, loop immediately. Otherwise, give a short moment to display Success/Error
                     // before returning to Idle.
                     bool hasMore;
                     lock (_lock)
@@ -317,6 +348,7 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
                     item.Cancel();
                     item.Tcs.TrySetCanceled();
                 }
+
                 _pendingItems.Clear();
             }
 
@@ -324,21 +356,50 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
+    private void RecordCompletion(SimulationWorkItem item,
+        DateTimeOffset startedAt,
+        TimeSpan duration,
+        Exception? workException)
     {
-        _channel.Writer.TryComplete();
-        await _shutdownCts.CancelAsync().ConfigureAwait(false);
+        if (_onCompleted is null || item.Telemetry is null)
+            return;
 
         try
         {
-            await _processingTask.ConfigureAwait(false);
-        }
-        catch
-        {
-            // Ignore exceptions during teardown
-        }
+            var outcome = workException switch
+            {
+                null => SimulationEventOutcome.Success,
+                OperationCanceledException => SimulationEventOutcome.Cancelled,
+                var _ => SimulationEventOutcome.Error,
+            };
 
-        _shutdownCts.Dispose();
+            _onCompleted(new SimulationEventRecord(
+                item.Id,
+                _readerId,
+                // Label and protocol are filled in by the orchestrator, which owns the door config.
+                string.Empty,
+                default,
+                item.Telemetry.Kind,
+                outcome,
+                item.Telemetry.CardEntryId,
+                item.Telemetry.CardNumber,
+                item.Telemetry.FacilityCode,
+                item.Telemetry.Format,
+                item.Telemetry.RawBits,
+                item.EnqueuedAt,
+                startedAt,
+                startedAt + duration,
+                (int)(startedAt - item.EnqueuedAt).TotalMilliseconds,
+                (int)duration.TotalMilliseconds,
+                item.QueueDepthAtEnqueue,
+                outcome == SimulationEventOutcome.Error
+                    ? workException?.Message
+                    : null));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Reader {R}: failed to record telemetry for item {Id}", _readerId, item.Id);
+        }
     }
 }
 
@@ -349,12 +410,15 @@ internal sealed class SimulationWorkItem(
     int readerId,
     string description,
     DoorEventType? eventType,
-    Func<CancellationToken, Task> work)
+    Func<CancellationToken, Task> work,
+    SimulationEventContext? telemetry = null)
 {
     public Guid Id { get; } = Guid.NewGuid();
     public int ReaderId { get; } = readerId;
     public string Description { get; } = description;
     public DoorEventType? EventType { get; } = eventType;
+    public SimulationEventContext? Telemetry { get; } = telemetry;
+    public int QueueDepthAtEnqueue { get; set; }
     public DateTimeOffset EnqueuedAt { get; } = DateTimeOffset.UtcNow;
     public Func<CancellationToken, Task> Work { get; } = work;
     public TaskCompletionSource<bool> Tcs { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

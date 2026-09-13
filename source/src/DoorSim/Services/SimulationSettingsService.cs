@@ -51,6 +51,7 @@ public class SimulationSettingsService(
         entity.DoorOpenMs = dto.DoorOpenMs;
         entity.RexLeadMs = dto.RexLeadMs;
         entity.QuickRexMs = dto.QuickRexMs;
+        entity.MetricsRetentionDays = dto.MetricsRetentionDays;
 
         await db.SaveChangesAsync().ConfigureAwait(false);
         Current = entity.ToDto();

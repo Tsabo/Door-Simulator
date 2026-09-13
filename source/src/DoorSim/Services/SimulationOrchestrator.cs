@@ -12,6 +12,7 @@ public class SimulationOrchestrator(
     IReaderBank bank,
     IServiceScopeFactory scopeFactory,
     SimulationSettingsService settings,
+    SimulationMetricsService metrics,
     ILogger<SimulationOrchestrator> logger) : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<int, ReaderWorkQueue> _queues = new();
@@ -64,7 +65,12 @@ public class SimulationOrchestrator(
                     else
                         await simulator.SimulateAccessCycleAsync(card!, t.CardToDoorDelayMs, t.DoorOpenMs).ConfigureAwait(false);
                 }
-            }, description, request.EventType, ct)
+            }, description, request.EventType, ct, new SimulationEventContext(
+                ToKind(request.EventType),
+                request.CardEntryId,
+                card?.CardNumber,
+                card?.FacilityCode,
+                card?.Format))
             .ConfigureAwait(false);
     }
 
@@ -84,7 +90,11 @@ public class SimulationOrchestrator(
             {
                 itemCt.ThrowIfCancellationRequested();
                 await simulator.SendCardAsync(request.CardNumber, request.FacilityCode, request.Format).ConfigureAwait(false);
-            }, description, DoorEventType.CardReadOnly, ct)
+            }, description, DoorEventType.CardReadOnly, ct, new SimulationEventContext(
+                SimulationEventKind.CardReadOnly,
+                CardNumber: request.CardNumber,
+                FacilityCode: request.FacilityCode,
+                Format: request.Format))
             .ConfigureAwait(false);
     }
 
@@ -100,7 +110,9 @@ public class SimulationOrchestrator(
             {
                 itemCt.ThrowIfCancellationRequested();
                 await simulator.SendBitsAsync(request.Bits).ConfigureAwait(false);
-            }, description, DoorEventType.CardReadOnly, ct)
+            }, description, DoorEventType.CardReadOnly, ct, new SimulationEventContext(
+                SimulationEventKind.RawBits,
+                RawBits: request.Bits))
             .ConfigureAwait(false);
     }
 
@@ -116,6 +128,7 @@ public class SimulationOrchestrator(
             var _ => $"Raw Card Read ({request.Format} FC:{request.FacilityCode} #{request.CardNumber})",
         };
 
+        var isEgress = request.EventType == DoorEventType.EgressCycle;
         var queue = GetOrCreateQueue(request.ReaderId);
         await queue.EnqueueAsync(async itemCt =>
             {
@@ -128,7 +141,17 @@ public class SimulationOrchestrator(
                     await simulator.SendCardAsync(request.CardNumber, request.FacilityCode, request.Format).ConfigureAwait(false);
                 else
                     await simulator.SimulateAccessCycleAsync(request.CardNumber, request.FacilityCode, request.Format, t.CardToDoorDelayMs, t.DoorOpenMs).ConfigureAwait(false);
-            }, description, request.EventType, ct)
+            }, description, request.EventType, ct, new SimulationEventContext(
+                ToKind(request.EventType),
+                CardNumber: isEgress
+                    ? null
+                    : request.CardNumber,
+                FacilityCode: isEgress
+                    ? null
+                    : request.FacilityCode,
+                Format: isEgress
+                    ? null
+                    : request.Format))
             .ConfigureAwait(false);
     }
 
@@ -138,53 +161,77 @@ public class SimulationOrchestrator(
 
     public async Task OpenDoorAsync(int readerId)
     {
-        try
-        {
-            if (bank.TryGetReader(readerId, out var simulator))
-                await simulator.OpenDoorAsync().ConfigureAwait(false);
-            else
-                logger.LogWarning("Reader {R}: open door ignored — reader not found in bank", readerId);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Reader {R}: open door failed", readerId);
-        }
+        await RunPrimitiveAsync(readerId, SimulationEventKind.DoorOpen, "open door",
+                sim => sim.OpenDoorAsync())
+            .ConfigureAwait(false);
     }
 
     public async Task CloseDoorAsync(int readerId)
     {
-        try
-        {
-            if (bank.TryGetReader(readerId, out var simulator))
-                await simulator.CloseDoorAsync().ConfigureAwait(false);
-            else
-                logger.LogWarning("Reader {R}: close door ignored — reader not found in bank", readerId);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Reader {R}: close door failed", readerId);
-        }
+        await RunPrimitiveAsync(readerId, SimulationEventKind.DoorClose, "close door",
+                sim => sim.CloseDoorAsync())
+            .ConfigureAwait(false);
     }
 
     /// <summary>Trip REX, hold for the global QuickRexMs, then reset.</summary>
     public async Task QuickRexAsync(int readerId)
     {
+        await RunPrimitiveAsync(readerId, SimulationEventKind.QuickRex, "quick REX", async sim =>
+            {
+                await sim.TripRexAsync().ConfigureAwait(false);
+                await Task.Delay(settings.Current.QuickRexMs).ConfigureAwait(false);
+                await sim.ResetRexAsync().ConfigureAwait(false);
+            })
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs a direct hardware primitive and records it. These bypass the reader work queue,
+    /// so they are timed and recorded here rather than in <see cref="ReaderWorkQueue" />.
+    /// </summary>
+    private async Task RunPrimitiveAsync(int readerId,
+        SimulationEventKind kind,
+        string action,
+        Func<IReaderSimulator, Task> work)
+    {
+        if (!bank.TryGetReader(readerId, out var simulator))
+        {
+            logger.LogWarning("Reader {R}: {Action} ignored — reader not found in bank", readerId, action);
+            return;
+        }
+
+        var startedAt = DateTimeOffset.UtcNow;
+        var startTicks = Stopwatch.GetTimestamp();
+        string? error = null;
+
         try
         {
-            if (!bank.TryGetReader(readerId, out var sim))
-            {
-                logger.LogWarning("Reader {R}: quick REX ignored — reader not found in bank", readerId);
-                return;
-            }
-
-            await sim.TripRexAsync().ConfigureAwait(false);
-            await Task.Delay(settings.Current.QuickRexMs).ConfigureAwait(false);
-            await sim.ResetRexAsync().ConfigureAwait(false);
+            await work(simulator).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Reader {R}: quick REX failed", readerId);
+            logger.LogError(ex, "Reader {R}: {Action} failed", readerId, action);
+            error = ex.Message;
         }
+
+        var duration = Stopwatch.GetElapsedTime(startTicks);
+        metrics.Record(new SimulationEventRecord(
+            Guid.NewGuid(),
+            readerId,
+            simulator.Config.Label,
+            simulator.Config.Protocol,
+            kind,
+            error is null
+                ? SimulationEventOutcome.Success
+                : SimulationEventOutcome.Error,
+            null, null, null, null, null,
+            startedAt,
+            startedAt,
+            startedAt + duration,
+            0,
+            (int)duration.TotalMilliseconds,
+            0,
+            error));
     }
 
     public SimulationStatus GetStatus(int readerId) =>
@@ -276,6 +323,7 @@ public class SimulationOrchestrator(
             await queue.DisposeAsync().ConfigureAwait(false);
 
         _status.TryRemove(readerId, out var _);
+        metrics.RemoveDoor(readerId);
     }
 
     // -------------------------------------------------------------------------
@@ -286,7 +334,24 @@ public class SimulationOrchestrator(
         _queues.GetOrAdd(readerId, id => new ReaderWorkQueue(
             id,
             SetStatus,
-            logger));
+            logger,
+            RecordQueuedEvent));
+
+    /// <summary>Stamps the queue's record with the door identity, which only the bank knows.</summary>
+    private void RecordQueuedEvent(SimulationEventRecord record)
+    {
+        if (bank.TryGetReader(record.DoorId, out var sim))
+            record = record with { Label = sim.Config.Label, Protocol = sim.Config.Protocol };
+
+        metrics.Record(record);
+    }
+
+    private static SimulationEventKind ToKind(DoorEventType eventType) => eventType switch
+    {
+        DoorEventType.AccessCycle => SimulationEventKind.AccessCycle,
+        DoorEventType.EgressCycle => SimulationEventKind.EgressCycle,
+        var _ => SimulationEventKind.CardReadOnly,
+    };
 
     private void SetStatus(int readerId, SimulationStatus status) =>
         _status[readerId] = status;

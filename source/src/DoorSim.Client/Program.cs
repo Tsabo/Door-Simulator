@@ -14,6 +14,7 @@ builder.Services.AddScoped<CardApiClient>();
 builder.Services.AddScoped<SimulationApiClient>();
 builder.Services.AddScoped<DoorApiClient>();
 builder.Services.AddScoped<SettingsApiClient>();
+builder.Services.AddScoped<MetricsApiClient>();
 
 builder.Services.AddMudServices();
 

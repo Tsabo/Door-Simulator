@@ -17,6 +17,7 @@ public partial class Settings
             DoorOpenMs = current.DoorOpenMs,
             RexLeadMs = current.RexLeadMs,
             QuickRexMs = current.QuickRexMs,
+            MetricsRetentionDays = current.MetricsRetentionDays,
         };
 
         _loading = false;
@@ -32,7 +33,8 @@ public partial class Settings
             _form.CardToDoorDelayMs,
             _form.DoorOpenMs,
             _form.RexLeadMs,
-            _form.QuickRexMs);
+            _form.QuickRexMs,
+            _form.MetricsRetentionDays);
 
         var (_, error) = await SettingsClient.UpdateTimingAsync(dto);
         if (error is not null)
@@ -49,5 +51,6 @@ public partial class Settings
         public int DoorOpenMs { get; set; } = 5000;
         public int RexLeadMs { get; set; } = 500;
         public int QuickRexMs { get; set; } = 2000;
+        public int MetricsRetentionDays { get; set; } = 30;
     }
 }

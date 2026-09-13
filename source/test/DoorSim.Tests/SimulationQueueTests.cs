@@ -132,7 +132,8 @@ public class SimulationQueueTests
         var services = new ServiceCollection().BuildServiceProvider();
         var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
         var settings = new SimulationSettingsService(scopeFactory, NullLogger<SimulationSettingsService>.Instance);
-        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, NullLogger<SimulationOrchestrator>.Instance);
+        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, new SimulationMetricsService(scopeFactory, bank, settings, NullLogger<SimulationMetricsService>.Instance),
+            NullLogger<SimulationOrchestrator>.Instance);
 
         var r1Entered = new TaskCompletionSource<bool>();
         var r2Entered = new TaskCompletionSource<bool>();
@@ -184,7 +185,8 @@ public class SimulationQueueTests
         var services = new ServiceCollection().BuildServiceProvider();
         var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
         var settings = new SimulationSettingsService(scopeFactory, NullLogger<SimulationSettingsService>.Instance);
-        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, NullLogger<SimulationOrchestrator>.Instance);
+        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, new SimulationMetricsService(scopeFactory, bank, settings, NullLogger<SimulationMetricsService>.Instance),
+            NullLogger<SimulationOrchestrator>.Instance);
 
         var startedTcs = new TaskCompletionSource<bool>();
         var releaseTcs = new TaskCompletionSource<bool>();
@@ -235,6 +237,10 @@ public class SimulationQueueTests
     {
         public int SendCount { get; private set; }
         public Func<Task>? OnSendCard { get; set; }
+
+        public DoorConfiguration Config { get; } = new(1, "Recording", ProtocolType.Wiegand,
+            null, null, null, null, null, null, null, null, null, null, null, null, null);
+
         public bool IsConnected => true;
         public ReaderLedState? LedState => null;
         public bool IsDoorOpen => false;

@@ -17,6 +17,11 @@ public static class TimingValidation
     public const int MinQuickRexMs = 100;
     public const int MaxQuickRexMs = 60_000;
 
+    /// <summary>Zero is allowed and means "never purge telemetry".</summary>
+    public const int MinMetricsRetentionDays = 0;
+
+    public const int MaxMetricsRetentionDays = 3650;
+
     /// <summary>
     /// Validates timing settings to prevent invalid simulation parameters.
     /// </summary>
@@ -33,6 +38,9 @@ public static class TimingValidation
 
         if (settings.QuickRexMs is < MinQuickRexMs or > MaxQuickRexMs)
             return $"Quick REX duration must be between {MinQuickRexMs} and {MaxQuickRexMs} ms. Provided: {settings.QuickRexMs}.";
+
+        if (settings.MetricsRetentionDays is < MinMetricsRetentionDays or > MaxMetricsRetentionDays)
+            return $"Metrics retention must be between {MinMetricsRetentionDays} and {MaxMetricsRetentionDays} days. Provided: {settings.MetricsRetentionDays}.";
 
         return null;
     }

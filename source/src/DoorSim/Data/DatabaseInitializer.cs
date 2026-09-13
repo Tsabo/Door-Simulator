@@ -26,6 +26,20 @@ public static class DatabaseInitializer
             var expected = await new EFCoreSchemaReader(db).ReadAsync(ct);
             var diff = new SqliteSchemaComparer().Compare(current, expected, options);
 
+            // SQLite cannot ALTER COLUMN. If the telemetry table has an outdated column type,
+            // drop it so it is cleanly recreated.
+            if (diff.Operations.Any(o => o.TableName.Equals("SimulationEvents", StringComparison.OrdinalIgnoreCase)
+                                         && o.Type == MigrationOperationType.ModifyColumn))
+            {
+                logger.LogWarning("SimulationEvents schema has incompatible column types — rebuilding table");
+                await using var dropCmd = connection.CreateCommand();
+                dropCmd.CommandText = "DROP TABLE IF EXISTS \"SimulationEvents\"";
+                await dropCmd.ExecuteNonQueryAsync(ct);
+
+                current = await new SqliteSchemaReader(connection, options).ReadAsync(ct);
+                diff = new SqliteSchemaComparer().Compare(current, expected, options);
+            }
+
             if (!diff.HasChanges)
             {
                 logger.LogInformation("Database schema is up to date");

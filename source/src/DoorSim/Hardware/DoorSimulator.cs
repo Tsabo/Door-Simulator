@@ -8,7 +8,6 @@ namespace DoorSim.Hardware;
 /// </summary>
 public sealed class DoorSimulator : IReaderSimulator, IDisposable
 {
-    private readonly DoorConfiguration _config;
     private readonly DoorContactController _contacts;
     private readonly GpioController? _gpio;
     private readonly ILogger<DoorSimulator> _logger;
@@ -24,7 +23,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
         ModbusTcpRelayService? modbusTcp,
         ILogger<DoorSimulator> logger)
     {
-        _config = config;
+        Config = config;
         _gpio = gpio;
         _logger = logger;
         _contacts = new DoorContactController(config, gpio, modbus, modbusTcp, logger);
@@ -42,7 +41,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
         if (_gpio is null)
             return;
 
-        foreach (var pin in new[] { _config.D0Pin, _config.D1Pin })
+        foreach (var pin in new[] { Config.D0Pin, Config.D1Pin })
         {
             if (pin is null)
                 continue;
@@ -54,10 +53,12 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Door {Id}: error closing pin {Pin}", _config.Id, pin);
+                _logger.LogWarning(ex, "Door {Id}: error closing pin {Pin}", Config.Id, pin);
             }
         }
     }
+
+    public DoorConfiguration Config { get; }
 
     // -------------------------------------------------------------------------
     // Card read
@@ -83,7 +84,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
         EnsureWiegand();
         _logger.LogInformation(
             "Door {Id}: send {Format} FC={FC} Card={Card}",
-            _config.Id, card.Format, card.FacilityCode, card.CardNumber);
+            Config.Id, card.Format, card.FacilityCode, card.CardNumber);
 
         return Task.Run(() => _transmitter!.Send(card));
     }
@@ -94,7 +95,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
         EnsureWiegand();
         _logger.LogInformation(
             "Door {Id}: raw send {Format} FC={FC} Card={Card}",
-            _config.Id, format, facilityCode, cardNumber);
+            Config.Id, format, facilityCode, cardNumber);
 
         return Task.Run(() => _transmitter!.Send(cardNumber, facilityCode, format));
     }
@@ -105,7 +106,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
         EnsureWiegand();
         _logger.LogInformation(
             "Door {Id}: raw bits send ({BitCount} bits)",
-            _config.Id, bits.Length);
+            Config.Id, bits.Length);
 
         return Task.Run(() => _transmitter!.Send(bits));
     }
@@ -158,7 +159,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
     /// <inheritdoc />
     public async Task OpenDoorAsync()
     {
-        _logger.LogDebug("Door {Id}: door open", _config.Id);
+        _logger.LogDebug("Door {Id}: door open", Config.Id);
         await _contacts.OpenDoorAsync().ConfigureAwait(false);
         _isDoorOpen = true;
     }
@@ -166,7 +167,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
     /// <inheritdoc />
     public async Task CloseDoorAsync()
     {
-        _logger.LogDebug("Door {Id}: door close", _config.Id);
+        _logger.LogDebug("Door {Id}: door close", Config.Id);
         await _contacts.CloseDoorAsync().ConfigureAwait(false);
         _isDoorOpen = false;
     }
@@ -174,7 +175,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
     /// <inheritdoc />
     public async Task TripRexAsync()
     {
-        _logger.LogDebug("Door {Id}: REX trip", _config.Id);
+        _logger.LogDebug("Door {Id}: REX trip", Config.Id);
         await _contacts.TripRexAsync().ConfigureAwait(false);
         _isRexActive = true;
     }
@@ -182,7 +183,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
     /// <inheritdoc />
     public async Task ResetRexAsync()
     {
-        _logger.LogDebug("Door {Id}: REX reset", _config.Id);
+        _logger.LogDebug("Door {Id}: REX reset", Config.Id);
         await _contacts.ResetRexAsync().ConfigureAwait(false);
         _isRexActive = false;
     }
@@ -196,7 +197,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
         if (_gpio is null)
             return;
 
-        foreach (var pin in new[] { _config.D0Pin, _config.D1Pin })
+        foreach (var pin in new[] { Config.D0Pin, Config.D1Pin })
         {
             if (pin is null)
                 continue;
@@ -207,7 +208,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
 
         _logger.LogDebug(
             "Door {Id}: Wiegand GPIO pins initialized (D0={D0}, D1={D1})",
-            _config.Id, _config.D0Pin, _config.D1Pin);
+            Config.Id, Config.D0Pin, Config.D1Pin);
     }
 
     private void EnsureWiegand()
@@ -215,7 +216,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
         if (_transmitter is null)
         {
             throw new InvalidOperationException(
-                $"Door {_config.Id} ({_config.Label}): no D0/D1 pins configured — cannot send Wiegand credential.");
+                $"Door {Config.Id} ({Config.Label}): no D0/D1 pins configured — cannot send Wiegand credential.");
         }
     }
 }

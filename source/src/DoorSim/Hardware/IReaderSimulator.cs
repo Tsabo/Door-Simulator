@@ -5,6 +5,9 @@ namespace DoorSim.Hardware;
 /// </summary>
 public interface IReaderSimulator
 {
+    /// <summary>The door configuration this simulator was built from.</summary>
+    DoorConfiguration Config { get; }
+
     /// <summary>True when the reader's transport is connected and responding.</summary>
     /// <remarks>Always true for Wiegand (GPIO has no handshake). For OSDP, reflects the OSDP.Net Device.IsConnected state.</remarks>
     bool IsConnected { get; }

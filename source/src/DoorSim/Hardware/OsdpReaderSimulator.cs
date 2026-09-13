@@ -28,7 +28,6 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
     private static readonly TimeSpan _replyTimeout = TimeSpan.FromSeconds(2);
     private readonly int _baudRate;
 
-    private readonly DoorConfiguration _config;
     private readonly DoorContactController _contacts;
 
     // null when no serial port is configured (PIN-only DPS/REX mode)
@@ -50,7 +49,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         ModbusTcpRelayService? modbusTcp,
         ILoggerFactory loggerFactory)
     {
-        _config = config;
+        Config = config;
         _baudRate = OsdpBaudRates.Resolve(config.OsdpBaudRate);
         _logger = loggerFactory.CreateLogger<OsdpReaderSimulator>();
         _contacts = new DoorContactController(config, gpio, modbus, modbusTcp, _logger);
@@ -92,12 +91,14 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Door {Id}: error stopping OSDP listener", _config.Id);
+                _logger.LogWarning(ex, "Door {Id}: error stopping OSDP listener", Config.Id);
             }
         }
 
         _listener?.Dispose();
     }
+
+    public DoorConfiguration Config { get; }
 
     // -------------------------------------------------------------------------
     // Connectivity
@@ -130,7 +131,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         {
             _logger.LogWarning(
                 "Door {Id} ({Label}): no serial port — card send skipped.",
-                _config.Id, _config.Label);
+                Config.Id, Config.Label);
 
             return Task.CompletedTask;
         }
@@ -139,7 +140,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         {
             _logger.LogWarning(
                 "Door {Id} ({Label}): OSDP not connected — card send skipped.",
-                _config.Id, _config.Label);
+                Config.Id, Config.Label);
 
             return Task.CompletedTask;
         }
@@ -150,7 +151,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
 
         _logger.LogInformation(
             "Door {Id} ({Label}): queued osdp_RAW {Format} FC={FC} Card={Card} ({Bits} bits) — {Data}",
-            _config.Id, _config.Label, format, facilityCode, cardNumber, bitCount, cardData);
+            Config.Id, Config.Label, format, facilityCode, cardNumber, bitCount, cardData);
 
         return Task.CompletedTask;
     }
@@ -162,7 +163,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         {
             _logger.LogWarning(
                 "Door {Id} ({Label}): no serial port — bits send skipped.",
-                _config.Id, _config.Label);
+                Config.Id, Config.Label);
 
             return Task.CompletedTask;
         }
@@ -171,7 +172,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         {
             _logger.LogWarning(
                 "Door {Id} ({Label}): OSDP not connected — bits send skipped.",
-                _config.Id, _config.Label);
+                Config.Id, Config.Label);
 
             return Task.CompletedTask;
         }
@@ -181,7 +182,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
 
         _logger.LogInformation(
             "Door {Id} ({Label}): queued osdp_RAW ({Bits} bits) — {Data}",
-            _config.Id, _config.Label, bits.Length, cardData);
+            Config.Id, Config.Label, bits.Length, cardData);
 
         return Task.CompletedTask;
     }
@@ -234,7 +235,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
     /// <inheritdoc />
     public async Task OpenDoorAsync()
     {
-        _logger.LogDebug("Door {Id}: door open", _config.Id);
+        _logger.LogDebug("Door {Id}: door open", Config.Id);
         await _contacts.OpenDoorAsync().ConfigureAwait(false);
         _isDoorOpen = true;
     }
@@ -242,7 +243,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
     /// <inheritdoc />
     public async Task CloseDoorAsync()
     {
-        _logger.LogDebug("Door {Id}: door close", _config.Id);
+        _logger.LogDebug("Door {Id}: door close", Config.Id);
         await _contacts.CloseDoorAsync().ConfigureAwait(false);
         _isDoorOpen = false;
     }
@@ -250,7 +251,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
     /// <inheritdoc />
     public async Task TripRexAsync()
     {
-        _logger.LogDebug("Door {Id}: REX trip", _config.Id);
+        _logger.LogDebug("Door {Id}: REX trip", Config.Id);
         await _contacts.TripRexAsync().ConfigureAwait(false);
         _isRexActive = true;
     }
@@ -258,7 +259,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
     /// <inheritdoc />
     public async Task ResetRexAsync()
     {
-        _logger.LogDebug("Door {Id}: REX reset", _config.Id);
+        _logger.LogDebug("Door {Id}: REX reset", Config.Id);
         await _contacts.ResetRexAsync().ConfigureAwait(false);
         _isRexActive = false;
     }
@@ -274,7 +275,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
 
             _logger.LogInformation(
                 "Door {Id} ({Label}): starting OSDP listener on {Port} at {Baud} baud",
-                _config.Id, _config.Label, serialPort, _baudRate);
+                Config.Id, Config.Label, serialPort, _baudRate);
 
             await _device!.StartListening(_listener).ConfigureAwait(false);
         }
@@ -282,7 +283,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         {
             _logger.LogError(ex,
                 "Door {Id} ({Label}): OSDP listener failed on {Port}",
-                _config.Id, _config.Label, serialPort);
+                Config.Id, Config.Label, serialPort);
         }
     }
 

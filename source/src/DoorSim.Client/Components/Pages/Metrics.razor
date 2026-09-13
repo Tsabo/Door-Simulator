@@ -1,0 +1,313 @@
+@page "/metrics"
+@inject MetricsApiClient MetricsClient
+@inject DoorApiClient DoorClient
+@implements IDisposable
+
+<PageTitle>Telemetry — DoorSim</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-6">
+    <MudText Typo="Typo.h4">Telemetry</MudText>
+    <div class="d-flex align-center ga-2">
+        <MudSelect T="int?" Value="_doorFilter" ValueChanged="OnDoorFilterChanged"
+                   Label="Door" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:180px;" Clearable="true">
+            <MudSelectItem T="int?" Value="@((int?)null)">All doors</MudSelectItem>
+            @foreach (var door in _doors)
+            {
+                <MudSelectItem T="int?" Value="@((int?)door.Id)">@door.Label</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTooltip Text="Refresh now">
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="RefreshAsync" Disabled="@_loading" />
+        </MudTooltip>
+        <MudTooltip Text="Delete recorded telemetry">
+            <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep" Color="Color.Error" OnClick="PurgeAsync" />
+        </MudTooltip>
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">
+        @_error
+    </MudAlert>
+}
+
+@if (_loading && _summary is null)
+{
+    <MudContainer Class="d-flex justify-center mt-16">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    </MudContainer>
+}
+else if (_summary is null || _summary.Totals.Total == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">
+        No simulations recorded yet. Run a card read or door cycle from the Reader Panel and it will show up here.
+    </MudAlert>
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.overline" Color="Color.Tertiary">Total simulations</MudText>
+                <MudText Typo="Typo.h4">@_summary.Totals.Total</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.overline" Color="Color.Tertiary">Throughput</MudText>
+                <MudText Typo="Typo.h4">@_summary.Totals.EventsPerMinute.ToString("0.##")<MudText Typo="Typo.body2" Inline="true" Color="Color.Tertiary"> /min</MudText></MudText>
+                <MudText Typo="Typo.body2" Color="Color.Tertiary">@FormatGap(_summary.Totals.AvgGapSeconds) between events</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.overline" Color="Color.Tertiary">Busiest reader</MudText>
+                <MudText Typo="Typo.h6">@(_busiest?.Label ?? "—")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Tertiary">@(_busiest?.Total ?? 0) simulations</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.overline" Color="Color.Tertiary">Errors</MudText>
+                <MudText Typo="Typo.h4" Color="@(_summary.Totals.Error > 0 ? Color.Error : Color.Default)">@_summary.Totals.Error</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Tertiary">@_summary.Totals.Cancelled cancelled</MudText>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="8">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Activity over time</MudText>
+                    </CardHeaderContent>
+                    <CardHeaderActions>
+                        <MudSelect T="int" Value="_windowMinutes" ValueChanged="OnWindowChanged"
+                                   Label="Window" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:130px;">
+                            <MudSelectItem T="int" Value="60">Last hour</MudSelectItem>
+                            <MudSelectItem T="int" Value="360">Last 6 hours</MudSelectItem>
+                            <MudSelectItem T="int" Value="1440">Last 24 hours</MudSelectItem>
+                            <MudSelectItem T="int" Value="10080">Last 7 days</MudSelectItem>
+                        </MudSelect>
+                    </CardHeaderActions>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_series.Length == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Tertiary">No activity in this window.</MudText>
+                    }
+                    else
+                    {
+                        <MudChart T="double"
+                                  ChartType="ChartType.Line"
+                                  ChartSeries="@_chartSeries"
+                                  ChartLabels="@_chartLabels"
+                                  Width="100%"
+                                  Height="280px" />
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudCard Style="height:100%;">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Simulation type</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_summary.ByKind.Length > 0)
+                    {
+                        <MudChart T="double"
+                                  ChartType="ChartType.Donut"
+                                  ChartSeries="@(new List<ChartSeries<double>> { new([.. _summary.ByKind.Select(k => (double)k.Count)]) })"
+                                  ChartLabels="@(_summary.ByKind.Select(k => SplitPascal(k.Kind.ToString())).ToArray())"
+                                  Width="100%"
+                                  Height="260px" />
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Most used credentials</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent Class="pa-0">
+                    <MudTable Items="@_summary.TopCards" Dense="true" Hover="true" Elevation="0">
+                        <HeaderContent>
+                            <MudTh>Card</MudTh>
+                            <MudTh>Facility</MudTh>
+                            <MudTh>Format</MudTh>
+                            <MudTh Style="text-align:right">Reads</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Card">#@context.CardNumber</MudTd>
+                            <MudTd DataLabel="Facility">@context.FacilityCode</MudTd>
+                            <MudTd DataLabel="Format">@context.Format</MudTd>
+                            <MudTd DataLabel="Reads" Style="text-align:right">@context.Count</MudTd>
+                        </RowTemplate>
+                        <NoRecordsContent>
+                            <MudText Typo="Typo.body2" Color="Color.Tertiary" Class="pa-4">No card reads recorded.</MudText>
+                        </NoRecordsContent>
+                    </MudTable>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudCard Style="height:100%;">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Wiegand format</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_summary.ByFormat.Length > 0)
+                    {
+                        <MudChart T="double"
+                                  ChartType="ChartType.Pie"
+                                  ChartSeries="@(new List<ChartSeries<double>> { new([.. _summary.ByFormat.Select(f => (double)f.Count)]) })"
+                                  ChartLabels="@(_summary.ByFormat.Select(f => f.Format.ToString()).ToArray())"
+                                  Width="100%"
+                                  Height="260px" />
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Tertiary">No card reads recorded.</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Per-reader breakdown</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent Class="pa-0">
+                    <MudTable Items="@_summary.PerDoor" Dense="true" Hover="true" Elevation="0">
+                        <HeaderContent>
+                            <MudTh>Reader</MudTh>
+                            <MudTh Style="text-align:right">Total</MudTh>
+                            <MudTh Style="text-align:right">Errors</MudTh>
+                            <MudTh Style="text-align:right">Cancelled</MudTh>
+                            <MudTh Style="text-align:right">Per min</MudTh>
+                            <MudTh Style="text-align:right">Avg gap</MudTh>
+                            <MudTh Style="text-align:right">Min / max gap</MudTh>
+                            <MudTh Style="text-align:right">Avg duration</MudTh>
+                            <MudTh Style="text-align:right">Avg queue wait</MudTh>
+                            <MudTh>Connectivity</MudTh>
+                            <MudTh Style="text-align:right">Last seen</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Reader">@context.Label</MudTd>
+                            <MudTd DataLabel="Total" Style="text-align:right">@context.Total</MudTd>
+                            <MudTd DataLabel="Errors" Style="text-align:right">@context.Error</MudTd>
+                            <MudTd DataLabel="Cancelled" Style="text-align:right">@context.Cancelled</MudTd>
+                            <MudTd DataLabel="Per min" Style="text-align:right">@context.EventsPerMinute.ToString("0.##")</MudTd>
+                            <MudTd DataLabel="Avg gap" Style="text-align:right">@FormatGap(context.AvgGapSeconds)</MudTd>
+                            <MudTd DataLabel="Min / max gap" Style="text-align:right">
+                                @(context.MinGapSeconds is null ? "—" : $"{FormatGap(context.MinGapSeconds.Value)} / {FormatGap(context.MaxGapSeconds!.Value)}")
+                            </MudTd>
+                            <MudTd DataLabel="Avg duration" Style="text-align:right">@context.AvgDurationMs.ToString("0") ms</MudTd>
+                            <MudTd DataLabel="Avg queue wait" Style="text-align:right">@context.AvgQueueWaitMs.ToString("0") ms</MudTd>
+                            <MudTd DataLabel="Connectivity">@ConnectivityLabel(context.DoorId)</MudTd>
+                            <MudTd DataLabel="Last seen" Style="text-align:right">@(context.LastEventAt?.ToLocalTime().ToString("MMM d HH:mm:ss") ?? "—")</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Activity by hour</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Tertiary">Last 30 days, server local time.</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <div class="heatmap">
+                        <div class="heatmap-row">
+                            <span class="heatmap-day"></span>
+                            @for (var hour = 0; hour < 24; hour += 3)
+                            {
+                                <span class="heatmap-hour" style="grid-column: span 3;">@hour.ToString("00")</span>
+                            }
+                        </div>
+                        @for (var day = 0; day < 7; day++)
+                        {
+                            var currentDay = day;
+                            <div class="heatmap-row">
+                                <span class="heatmap-day">@DayLabel(currentDay)</span>
+                                @for (var hour = 0; hour < 24; hour++)
+                                {
+                                    var count = HeatCount(currentDay, hour);
+                                    <MudTooltip Text="@($"{DayLabel(currentDay)} {hour:00}:00 — {count} event(s)")">
+                                        <span class="heatmap-cell" style="@HeatStyle(count)"></span>
+                                    </MudTooltip>
+                                }
+                            </div>
+                        }
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Recent simulations</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent Class="pa-0">
+                    <MudTable Items="@_recent" Dense="true" Hover="true" Elevation="0" FixedHeader="true" Height="400px">
+                        <HeaderContent>
+                            <MudTh>When</MudTh>
+                            <MudTh>Reader</MudTh>
+                            <MudTh>Type</MudTh>
+                            <MudTh>Credential</MudTh>
+                            <MudTh>Outcome</MudTh>
+                            <MudTh Style="text-align:right">Duration</MudTh>
+                            <MudTh Style="text-align:right">Queue wait</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="When">@context.CompletedAt.ToLocalTime().ToString("MMM d HH:mm:ss")</MudTd>
+                            <MudTd DataLabel="Reader">@(string.IsNullOrEmpty(context.Label) ? $"Door {context.DoorId}" : context.Label)</MudTd>
+                            <MudTd DataLabel="Type">@SplitPascal(context.Kind.ToString())</MudTd>
+                            <MudTd DataLabel="Credential">@CredentialLabel(context)</MudTd>
+                            <MudTd DataLabel="Outcome">
+                                <MudChip T="string" Size="Size.Small" Color="@OutcomeColor(context.Outcome)" Variant="Variant.Text">
+                                    @context.Outcome
+                                </MudChip>
+                                @if (context.Error is not null)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Error">@context.Error</MudText>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Duration" Style="text-align:right">@context.DurationMs ms</MudTd>
+                            <MudTd DataLabel="Queue wait" Style="text-align:right">@context.QueueWaitMs ms</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+<style>
+    .heatmap { display: flex; flex-direction: column; gap: 3px; overflow-x: auto; }
+    .heatmap-row { display: grid; grid-template-columns: 3rem repeat(24, minmax(14px, 1fr)); gap: 3px; align-items: center; }
+    .heatmap-day { font-size: .7rem; opacity: .7; }
+    .heatmap-hour { font-size: .7rem; opacity: .7; text-align: left; }
+    .heatmap-cell { display: block; aspect-ratio: 1; border-radius: 2px; min-height: 14px; }
+</style>

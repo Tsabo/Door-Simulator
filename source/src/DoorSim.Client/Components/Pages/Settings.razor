@@ -63,6 +63,16 @@ else
                                      Step="500"
                                      HelperText="How long a standalone REX pulse lasts (no door movement)"
                                      Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Class="mb-4" />
+
+                    <MudNumericField T="int" @bind-Value="_form.MetricsRetentionDays"
+                                     Label="Telemetry retention (days)"
+                                     Min="0"
+                                     Max="3650"
+                                     Step="1"
+                                     HelperText="Older telemetry events are purged at startup. 0 keeps them forever."
+                                     Variant="Variant.Outlined"
                                      Margin="Margin.Dense" />
 
                     @if (_error is not null)

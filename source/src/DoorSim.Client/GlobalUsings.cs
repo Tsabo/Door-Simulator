@@ -1,3 +1,4 @@
+global using System.Globalization;
 global using System.Net.Http.Json;
 global using DoorSim.Client.Services;
 global using DoorSim.Shared.Json;

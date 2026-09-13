@@ -35,9 +35,7 @@ builder.Host.UseSerilog((ctx, lc) =>
 
     var seqUrl = ctx.Configuration["Seq:ServerUrl"];
     if (!string.IsNullOrWhiteSpace(seqUrl))
-    {
         lc.WriteTo.Seq(seqUrl);
-    }
 });
 
 // -------------------------------------------------------------------------
@@ -75,6 +73,7 @@ builder.Services.AddSingleton<ModbusTcpRelayService>();
 builder.Services.AddSingleton<SimulationSettingsService>();
 builder.Services.AddSingleton<DynamicSimulatorBank>();
 builder.Services.AddSingleton<IReaderBank>(sp => sp.GetRequiredService<DynamicSimulatorBank>());
+builder.Services.AddSingleton<SimulationMetricsService>();
 builder.Services.AddSingleton<SimulationOrchestrator>();
 
 // Data
@@ -143,6 +142,7 @@ await using (var scope = app.Services.CreateAsyncScope())
 // Load global simulation settings, then door configurations
 await app.Services.GetRequiredService<SimulationSettingsService>().LoadAsync();
 await app.Services.GetRequiredService<DynamicSimulatorBank>().LoadFromDbAsync();
+await app.Services.GetRequiredService<SimulationMetricsService>().LoadAsync();
 
 // -------------------------------------------------------------------------
 // Middleware
@@ -154,9 +154,7 @@ if (app.Environment.IsDevelopment())
     app.UseWebAssemblyDebugging();
 }
 else
-{
     app.UseExceptionHandler();
-}
 
 app.UseForwardedHeaders();
 app.UseBlazorFrameworkFiles();
@@ -171,6 +169,7 @@ app.MapCardsEndpoints();
 app.MapDoorsEndpoints();
 app.MapSimulationEndpoints();
 app.MapSettingsEndpoints();
+app.MapMetricsEndpoints();
 
 // API documentation — always available, not gated to Development.
 // ScalarOptions.ProxyUrl defaults to null (no proxy), which is what we want for

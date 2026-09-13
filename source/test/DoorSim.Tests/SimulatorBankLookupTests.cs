@@ -50,7 +50,8 @@ public class SimulatorBankLookupTests
         var services = new ServiceCollection().BuildServiceProvider();
         var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
         var settings = new SimulationSettingsService(scopeFactory, NullLogger<SimulationSettingsService>.Instance);
-        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, NullLogger<SimulationOrchestrator>.Instance);
+        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, new SimulationMetricsService(scopeFactory, bank, settings, NullLogger<SimulationMetricsService>.Instance),
+            NullLogger<SimulationOrchestrator>.Instance);
 
         var isConnected = orchestrator.GetConnectivity(999);
         await Assert.That(isConnected).IsFalse();
@@ -63,7 +64,8 @@ public class SimulatorBankLookupTests
         var services = new ServiceCollection().BuildServiceProvider();
         var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
         var settings = new SimulationSettingsService(scopeFactory, NullLogger<SimulationSettingsService>.Instance);
-        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, NullLogger<SimulationOrchestrator>.Instance);
+        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, new SimulationMetricsService(scopeFactory, bank, settings, NullLogger<SimulationMetricsService>.Instance),
+            NullLogger<SimulationOrchestrator>.Instance);
 
         var led = orchestrator.GetLedState(999);
         await Assert.That(led).IsNull();
@@ -71,6 +73,9 @@ public class SimulatorBankLookupTests
 
     private sealed class FakeReaderSimulator : IReaderSimulator
     {
+        public DoorConfiguration Config { get; } = new(1, "Fake", ProtocolType.Wiegand,
+            null, null, null, null, null, null, null, null, null, null, null, null, null);
+
         public bool IsConnected => true;
         public ReaderLedState? LedState => null;
         public bool IsDoorOpen => false;
