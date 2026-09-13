@@ -4,6 +4,7 @@ using OSDP.Net.Model.CommandData;
 using OSDP.Net.Model.ReplyData;
 using CommunicationConfiguration = OSDP.Net.Model.CommandData.CommunicationConfiguration;
 using DeviceCapabilities = OSDP.Net.Model.ReplyData.DeviceCapabilities;
+using ManufacturerSpecific = OSDP.Net.Model.CommandData.ManufacturerSpecific;
 
 namespace DoorSim.Hardware;
 
@@ -186,6 +187,16 @@ internal sealed class LoggingDevice : Device
         _logger.LogInformation(
             "Door {Id} ({Label}): CP sent osdp_OUT (relay/output control): {Controls}",
             _doorId, _label, controls);
+        return new Ack();
+    }
+
+    protected override PayloadData HandleManufacturerCommand(ManufacturerSpecific commandPayload)
+    {
+        _logger.LogInformation(
+            "Door {Id} ({Label}): CP sent osdp_MFG vendor={Vendor} data={Data}",
+            _doorId, _label,
+            BitConverter.ToString(commandPayload.VendorCode),
+            BitConverter.ToString(commandPayload.Data));
         return new Ack();
     }
 
