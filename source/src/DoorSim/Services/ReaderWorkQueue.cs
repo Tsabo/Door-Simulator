@@ -11,6 +11,7 @@ namespace DoorSim.Services;
 public sealed class ReaderWorkQueue : IAsyncDisposable
 {
     private readonly Channel<SimulationWorkItem> _channel;
+    private readonly Func<int>? _getQueueItemDelayMs;
     private readonly Lock _lock = new();
     private readonly ILogger _logger;
     private readonly Action<SimulationEventRecord>? _onCompleted;
@@ -25,11 +26,13 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
     public ReaderWorkQueue(int readerId,
         Action<int, SimulationStatus> statusCallback,
         ILogger logger,
-        Action<SimulationEventRecord>? onCompleted = null)
+        Action<SimulationEventRecord>? onCompleted = null,
+        Func<int>? getQueueItemDelayMs = null)
     {
         _readerId = readerId;
         _statusCallback = statusCallback;
         _onCompleted = onCompleted;
+        _getQueueItemDelayMs = getQueueItemDelayMs;
         _logger = logger;
         _channel = Channel.CreateUnbounded<SimulationWorkItem>(new UnboundedChannelOptions
         {
@@ -302,8 +305,8 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
                     else
                         item.Tcs.TrySetResult(true);
 
-                    // If more items are waiting, loop immediately. Otherwise, give a short moment to display Success/Error
-                    // before returning to Idle.
+                    // If more items are waiting, apply inter-item queue delay if configured, then loop.
+                    // Otherwise, give a short moment to display Success/Error before returning to Idle.
                     bool hasMore;
                     lock (_lock)
                     {
@@ -311,7 +314,22 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
                     }
 
                     if (hasMore)
+                    {
+                        var delayMs = _getQueueItemDelayMs?.Invoke() ?? 0;
+                        if (delayMs > 0)
+                        {
+                            try
+                            {
+                                await Task.Delay(delayMs, _shutdownCts.Token).ConfigureAwait(false);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                // Shutdown requested
+                            }
+                        }
+
                         continue;
+                    }
 
                     try
                     {

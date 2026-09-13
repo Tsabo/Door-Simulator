@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using DoorSim.Hardware;
 using DoorSim.Services;
@@ -132,8 +133,8 @@ public class SimulationQueueTests
         var services = new ServiceCollection().BuildServiceProvider();
         var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
         var settings = new SimulationSettingsService(scopeFactory, NullLogger<SimulationSettingsService>.Instance);
-        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, new SimulationMetricsService(scopeFactory, bank, settings, NullLogger<SimulationMetricsService>.Instance),
-            NullLogger<SimulationOrchestrator>.Instance);
+        await using var metrics = new SimulationMetricsService(scopeFactory, bank, settings, NullLogger<SimulationMetricsService>.Instance);
+        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, metrics, NullLogger<SimulationOrchestrator>.Instance);
 
         var r1Entered = new TaskCompletionSource<bool>();
         var r2Entered = new TaskCompletionSource<bool>();
@@ -185,8 +186,8 @@ public class SimulationQueueTests
         var services = new ServiceCollection().BuildServiceProvider();
         var scopeFactory = services.GetRequiredService<IServiceScopeFactory>();
         var settings = new SimulationSettingsService(scopeFactory, NullLogger<SimulationSettingsService>.Instance);
-        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, new SimulationMetricsService(scopeFactory, bank, settings, NullLogger<SimulationMetricsService>.Instance),
-            NullLogger<SimulationOrchestrator>.Instance);
+        await using var metrics = new SimulationMetricsService(scopeFactory, bank, settings, NullLogger<SimulationMetricsService>.Instance);
+        await using var orchestrator = new SimulationOrchestrator(bank, scopeFactory, settings, metrics, NullLogger<SimulationOrchestrator>.Instance);
 
         var startedTcs = new TaskCompletionSource<bool>();
         var releaseTcs = new TaskCompletionSource<bool>();
@@ -231,6 +232,42 @@ public class SimulationQueueTests
         // Cancelled and cleared items should throw OperationCanceledException when awaited
         await Assert.That(async () => await send2).Throws<OperationCanceledException>();
         await Assert.That(async () => await send3).Throws<OperationCanceledException>();
+    }
+
+    [Test]
+    public async Task ReaderWorkQueue_ObservesQueueItemDelay()
+    {
+        const int delayMs = 100;
+        await using var queue = new ReaderWorkQueue(
+            1,
+            (_, _) => { },
+            NullLogger.Instance,
+            getQueueItemDelayMs: () => delayMs);
+
+        var startedTcs = new TaskCompletionSource<bool>();
+        var releaseTcs = new TaskCompletionSource<bool>();
+        var item2StartTicks = 0L;
+
+        var task1 = queue.EnqueueAsync(async _ =>
+        {
+            startedTcs.SetResult(true);
+            await releaseTcs.Task;
+        }, "Task 1");
+
+        var task2 = queue.EnqueueAsync(async _ =>
+        {
+            item2StartTicks = Stopwatch.GetTimestamp();
+            await Task.CompletedTask;
+        }, "Task 2");
+
+        await startedTcs.Task;
+        var t1FinishedTicks = Stopwatch.GetTimestamp();
+        releaseTcs.SetResult(true);
+
+        await Task.WhenAll(task1, task2);
+
+        var elapsedMs = Stopwatch.GetElapsedTime(t1FinishedTicks, item2StartTicks).TotalMilliseconds;
+        await Assert.That(elapsedMs).IsGreaterThanOrEqualTo(delayMs - 30); // Allow standard timer jitter
     }
 
     private sealed class RecordingReaderSimulator : IReaderSimulator

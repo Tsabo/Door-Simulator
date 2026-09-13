@@ -23,8 +23,8 @@ public class SimulationSettingsService(
         {
             Current = entity.ToDto();
             logger.LogInformation(
-                "Simulation timing loaded — CardToDoor={C}ms DoorOpen={D}ms RexLead={R}ms QuickRex={Q}ms",
-                Current.CardToDoorDelayMs, Current.DoorOpenMs, Current.RexLeadMs, Current.QuickRexMs);
+                "Simulation timing loaded — CardToDoor={C}ms DoorOpen={D}ms RexLead={R}ms QuickRex={Q}ms QueueItemDelay={QID}ms",
+                Current.CardToDoorDelayMs, Current.DoorOpenMs, Current.RexLeadMs, Current.QuickRexMs, Current.QueueItemDelayMs);
         }
         else
             logger.LogInformation("No simulation timing row found — using defaults");
@@ -52,13 +52,14 @@ public class SimulationSettingsService(
         entity.RexLeadMs = dto.RexLeadMs;
         entity.QuickRexMs = dto.QuickRexMs;
         entity.MetricsRetentionDays = dto.MetricsRetentionDays;
+        entity.QueueItemDelayMs = dto.QueueItemDelayMs;
 
         await db.SaveChangesAsync().ConfigureAwait(false);
         Current = entity.ToDto();
 
         logger.LogInformation(
-            "Simulation timing updated — CardToDoor={C}ms DoorOpen={D}ms RexLead={R}ms QuickRex={Q}ms",
-            Current.CardToDoorDelayMs, Current.DoorOpenMs, Current.RexLeadMs, Current.QuickRexMs);
+            "Simulation timing updated — CardToDoor={C}ms DoorOpen={D}ms RexLead={R}ms QuickRex={Q}ms QueueItemDelay={QID}ms",
+            Current.CardToDoorDelayMs, Current.DoorOpenMs, Current.RexLeadMs, Current.QuickRexMs, Current.QueueItemDelayMs);
 
         return (Current, null);
     }

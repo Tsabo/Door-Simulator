@@ -9,7 +9,8 @@ public class SimulationSettingsEntity
     public int RexLeadMs { get; set; } = 500;
     public int QuickRexMs { get; set; } = 2000;
     public int MetricsRetentionDays { get; set; } = 30;
+    public int QueueItemDelayMs { get; set; } = 1000;
 
     public SimulationTimingSettings ToDto() =>
-        new(CardToDoorDelayMs, DoorOpenMs, RexLeadMs, QuickRexMs, MetricsRetentionDays);
+        new(CardToDoorDelayMs, DoorOpenMs, RexLeadMs, QuickRexMs, MetricsRetentionDays, QueueItemDelayMs);
 }

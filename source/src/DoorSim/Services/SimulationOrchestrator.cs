@@ -335,7 +335,8 @@ public class SimulationOrchestrator(
             id,
             SetStatus,
             logger,
-            RecordQueuedEvent));
+            RecordQueuedEvent,
+            () => settings.Current.QueueItemDelayMs));
 
     /// <summary>Stamps the queue's record with the door identity, which only the bank knows.</summary>
     private void RecordQueuedEvent(SimulationEventRecord record)

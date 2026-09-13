@@ -17,6 +17,9 @@ public static class TimingValidation
     public const int MinQuickRexMs = 100;
     public const int MaxQuickRexMs = 60_000;
 
+    public const int MinQueueItemDelayMs = 0;
+    public const int MaxQueueItemDelayMs = 60_000;
+
     /// <summary>Zero is allowed and means "never purge telemetry".</summary>
     public const int MinMetricsRetentionDays = 0;
 
@@ -41,6 +44,9 @@ public static class TimingValidation
 
         if (settings.MetricsRetentionDays is < MinMetricsRetentionDays or > MaxMetricsRetentionDays)
             return $"Metrics retention must be between {MinMetricsRetentionDays} and {MaxMetricsRetentionDays} days. Provided: {settings.MetricsRetentionDays}.";
+
+        if (settings.QueueItemDelayMs is < MinQueueItemDelayMs or > MaxQueueItemDelayMs)
+            return $"Queue item delay must be between {MinQueueItemDelayMs} and {MaxQueueItemDelayMs} ms. Provided: {settings.QueueItemDelayMs}.";
 
         return null;
     }

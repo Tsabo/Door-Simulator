@@ -66,6 +66,16 @@ else
                                      Margin="Margin.Dense"
                                      Class="mb-4" />
 
+                    <MudNumericField T="int" @bind-Value="_form.QueueItemDelayMs"
+                                     Label="Queue item delay (ms)"
+                                     Min="0"
+                                     Max="60000"
+                                     Step="100"
+                                     HelperText="Delay between consecutive queued actions on the same reader"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Class="mb-4" />
+
                     <MudNumericField T="int" @bind-Value="_form.MetricsRetentionDays"
                                      Label="Telemetry retention (days)"
                                      Min="0"

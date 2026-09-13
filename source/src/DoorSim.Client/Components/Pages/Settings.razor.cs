@@ -18,6 +18,7 @@ public partial class Settings
             RexLeadMs = current.RexLeadMs,
             QuickRexMs = current.QuickRexMs,
             MetricsRetentionDays = current.MetricsRetentionDays,
+            QueueItemDelayMs = current.QueueItemDelayMs,
         };
 
         _loading = false;
@@ -34,7 +35,8 @@ public partial class Settings
             _form.DoorOpenMs,
             _form.RexLeadMs,
             _form.QuickRexMs,
-            _form.MetricsRetentionDays);
+            _form.MetricsRetentionDays,
+            _form.QueueItemDelayMs);
 
         var (_, error) = await SettingsClient.UpdateTimingAsync(dto);
         if (error is not null)
@@ -52,5 +54,6 @@ public partial class Settings
         public int RexLeadMs { get; set; } = 500;
         public int QuickRexMs { get; set; } = 2000;
         public int MetricsRetentionDays { get; set; } = 30;
+        public int QueueItemDelayMs { get; set; } = 1000;
     }
 }

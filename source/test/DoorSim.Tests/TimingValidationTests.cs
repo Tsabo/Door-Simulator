@@ -61,4 +61,16 @@ public class TimingValidationTests
         await Assert.That(error).IsNotNull();
         await Assert.That(error).Contains("Quick REX duration");
     }
+
+    [Test]
+    [Arguments(-1)]
+    [Arguments(60001)]
+    public async Task Validate_QueueItemDelayMsOutOfRange_ReturnsError(int delay)
+    {
+        var settings = new SimulationTimingSettings(QueueItemDelayMs: delay);
+        var error = TimingValidation.Validate(settings);
+
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error).Contains("Queue item delay");
+    }
 }
