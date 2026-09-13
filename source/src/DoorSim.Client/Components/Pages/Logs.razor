@@ -1,0 +1,50 @@
+@page "/logs"
+@inject LogsApiClient LogsClient
+@inject IJSRuntime JsRuntime
+@implements IDisposable
+
+<PageTitle>Logs — DoorSim</PageTitle>
+
+<div class="d-flex align-center justify-space-between flex-wrap ga-2 mb-4">
+    <MudText Typo="Typo.h4">Logs</MudText>
+    <div class="d-flex align-center ga-2">
+        <MudSwitch T="bool" Value="_autoScroll" ValueChanged="OnAutoScrollChanged" Color="Color.Primary" Label="Auto-scroll" />
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download"
+                   Href="/api/logs/download" Target="_blank">Download logs</MudButton>
+    </div>
+</div>
+
+<div class="d-flex align-center flex-wrap ga-2 mb-2">
+    <MudSelect T="LogSeverity" Value="_minLevel" ValueChanged="OnMinLevelChanged"
+               Label="Minimum level" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:160px;">
+        @foreach (var level in Enum.GetValues<LogSeverity>())
+        {
+            <MudSelectItem T="LogSeverity" Value="level">@level</MudSelectItem>
+        }
+    </MudSelect>
+    <MudTextField T="string" Value="_filterText" ValueChanged="OnFilterTextChanged"
+                   Label="Filter" Placeholder="e.g. osdp_LED" Variant="Variant.Outlined" Margin="Margin.Dense"
+                   Immediate="true" DebounceInterval="200" Adornment="Adornment.Start"
+                   AdornmentIcon="@Icons.Material.Filled.Search" Style="min-width:220px;" Clearable="true" />
+    <MudSwitch T="bool" Value="_excludeMode" ValueChanged="OnExcludeModeChanged" Color="Color.Warning" Label="Exclude matches" />
+    <MudText Typo="Typo.body2" Color="Color.Tertiary">@FilteredLines.Count of @_lines.Count lines</MudText>
+</div>
+
+<div class="log-console" @ref="_consoleRef">
+    @foreach (var line in FilteredLines)
+    {
+        <div class="log-line @LevelClass(line.Level)">
+            <span class="log-ts">@line.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")</span>
+            <span class="log-level">[@LevelAbbreviation(line.Level)]</span>
+            @if (!string.IsNullOrEmpty(line.SourceContext))
+            {
+                <span class="log-source">@ShortSource(line.SourceContext)</span>
+            }
+            <span class="log-message">@line.Message</span>
+            @if (line.Exception is not null)
+            {
+                <pre class="log-exception">@line.Exception</pre>
+            }
+        </div>
+    }
+</div>

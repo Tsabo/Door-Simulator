@@ -21,6 +21,13 @@ TaskScheduler.UnobservedTaskException += (_, args) =>
 
 var builder = WebApplication.CreateBuilder(args);
 
+// LogEventBus is constructed here, before UseSerilog, because Serilog sinks are built inside
+// the UseSerilog configuration lambda — which runs before builder.Build(), i.e. before the DI
+// container exists. The same instance is registered into DI below so LogsEndpoints can inject it.
+var logBus = new LogEventBus();
+var logDirectory = builder.Configuration["Logs:Directory"]
+                    ?? Path.Combine(builder.Environment.ContentRootPath, "logs");
+
 builder.Host.UseSerilog((ctx, lc) =>
 {
     lc.ReadFrom.Configuration(ctx.Configuration)
@@ -31,7 +38,15 @@ builder.Host.UseSerilog((ctx, lc) =>
             e.Exception is TimeoutException &&
             e.Properties.TryGetValue("SourceContext", out var sc) &&
             sc.ToString().Contains("OSDP.Net"))
-        .WriteTo.Console(outputTemplate: "{Timestamp:HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}");
+        .WriteTo.Console(outputTemplate: "{Timestamp:HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+        .WriteTo.Sink(new LogBroadcastSink(logBus))
+        .WriteTo.File(
+            Path.Combine(logDirectory, "doorsim-.log"),
+            rollingInterval: RollingInterval.Day,
+            fileSizeLimitBytes: 10 * 1024 * 1024,
+            rollOnFileSizeLimit: true,
+            retainedFileCountLimit: 7,
+            outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}");
 
     var seqUrl = ctx.Configuration["Seq:ServerUrl"];
     if (!string.IsNullOrWhiteSpace(seqUrl))
@@ -75,6 +90,10 @@ builder.Services.AddSingleton<DynamicSimulatorBank>();
 builder.Services.AddSingleton<IReaderBank>(sp => sp.GetRequiredService<DynamicSimulatorBank>());
 builder.Services.AddSingleton<SimulationMetricsService>();
 builder.Services.AddSingleton<SimulationOrchestrator>();
+
+// Registers the same LogEventBus instance the Serilog sink (constructed above, pre-DI) writes
+// into, so LogsEndpoints.MapLogsEndpoints can inject it.
+builder.Services.AddSingleton(logBus);
 
 // Data
 builder.Services.AddDbContext<DoorSimDbContext>(opt =>
@@ -170,6 +189,7 @@ app.MapDoorsEndpoints();
 app.MapSimulationEndpoints();
 app.MapSettingsEndpoints();
 app.MapMetricsEndpoints();
+app.MapLogsEndpoints();
 
 // API documentation — always available, not gated to Development.
 // ScalarOptions.ProxyUrl defaults to null (no proxy), which is what we want for

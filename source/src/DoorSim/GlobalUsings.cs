@@ -6,6 +6,7 @@ global using System.Runtime.InteropServices;
 global using DoorSim.Data;
 global using DoorSim.Data.Entities;
 global using DoorSim.Hardware;
+global using DoorSim.Logging;
 global using DoorSim.Services;
 global using DoorSim.Shared.Json;
 global using DoorSim.Shared.Models;

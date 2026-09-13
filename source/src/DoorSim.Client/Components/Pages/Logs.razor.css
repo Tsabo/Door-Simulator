@@ -1,0 +1,64 @@
+.log-console {
+    background: #0d0d0d;
+    color: #d4d4d4;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 0.85rem;
+    padding: 12px;
+    border-radius: 4px;
+    height: 70vh;
+    overflow-y: auto;
+    word-break: break-all;
+}
+
+.log-line {
+    padding: 1px 0;
+}
+
+.log-line:hover {
+    background: #1a1a1a;
+}
+
+.log-ts {
+    color: #6a6a6a;
+    margin-right: 6px;
+}
+
+.log-level {
+    margin-right: 6px;
+    font-weight: bold;
+}
+
+.log-source {
+    color: #569cd6;
+    margin-right: 6px;
+}
+
+.log-message {
+    color: #d4d4d4;
+    white-space: pre-wrap;
+}
+
+.log-exception {
+    color: #f14c4c;
+    margin: 2px 0 6px 0;
+    white-space: pre-wrap;
+    font-family: inherit;
+}
+
+.log-line.verbose .log-level,
+.log-line.debug .log-level {
+    color: #6a9955;
+}
+
+.log-line.information .log-level {
+    color: #4ec9b0;
+}
+
+.log-line.warning .log-level {
+    color: #dcdcaa;
+}
+
+.log-line.error .log-level,
+.log-line.fatal .log-level {
+    color: #f14c4c;
+}

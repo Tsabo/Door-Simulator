@@ -55,7 +55,7 @@ internal sealed class LoggingDevice : Device
         int baudRate,
         Func<bool> getDoorOpen,
         Func<bool> getRexActive,
-        bool ackManufacturerCommand = false)
+        bool ackManufacturerCommand = true)
         : base(config, loggerFactory)
     {
         _logger      = loggerFactory.CreateLogger<LoggingDevice>();
@@ -87,7 +87,7 @@ internal sealed class LoggingDevice : Device
     }
 
     // -------------------------------------------------------------------------
-    // Panel response to card reads — logged at Information.
+    // Panel response to card reads — logged at Debug.
     // If these fire after a card send, the panel saw the card.
     // -------------------------------------------------------------------------
 
@@ -112,7 +112,7 @@ internal sealed class LoggingDevice : Device
         var permVisibleBlink = led0.PermanentMode == PermanentReaderControlCode.SetPermanentState
                                && ShouldVisiblyBlink(led0.PermanentOnColor, led0.PermanentOffColor, led0.PermanentOffTime);
 
-        _logger.LogInformation(
+        _logger.LogDebug(
             "Door {Id} ({Label}): osdp_LED led={Led} tmp(mode={TmpMode},timer={TmpTimer},on={TmpOn},off={TmpOff},offTime={TmpOffTime},blink={TmpBlink}) perm(mode={PermMode},on={PermOn},off={PermOff},offTime={PermOffTime},blink={PermBlink})",
             _doorId,
             _label,
