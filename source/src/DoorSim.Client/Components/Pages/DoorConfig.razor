@@ -105,9 +105,10 @@ else
                         <MudSwitch T="bool" @bind-Value="_form.OsdpAckManufacturerCommand"
                                    Color="Color.Warning"
                                    Class="mt-3"
-                                   Label="@(_form.OsdpAckManufacturerCommand
-                                       ? "ACK manufacturer-specific (osdp_MFG) commands (default)"
-                                       : "NAK manufacturer-specific (osdp_MFG) commands")" />
+                                   Label="ACK manufacturer-specific (osdp_MFG) commands" />
+                        <MudText Typo="Typo.caption" Class="mb-4" Style="display:block;">
+                            On (default): reply Ack. Off: reply Nak (unsupported command).
+                        </MudText>
                     }
 
                     <!-- Door Contact (DPS) Section -->
