@@ -93,7 +93,7 @@ Write-Host "Checking for orphaned DoorSim/vsdbg processes on $remoteTarget..."
 Invoke-RemoteCommand "sudo pkill -9 -f '^$InstallPath/DoorSim$' 2>/dev/null; sudo pkill -9 -f '^/home/$RemoteUser/vsdbg/vsdbg$' 2>/dev/null; true"
 
 Write-Host "Refreshing $InstallPath on $remoteTarget..."
-Invoke-RemoteCommand "mkdir -p '$InstallPath'; find '$InstallPath' -mindepth 1 -maxdepth 1 ! -name '*.db' -exec rm -rf {} +"
+Invoke-RemoteCommand "mkdir -p '$InstallPath'; find '$InstallPath' -mindepth 1 -maxdepth 1 ! -name '*.db' ! -name 'appsettings.Production.json' -exec rm -rf {} +"
 
 Write-Host "Copying new build to $remoteTarget..."
 Get-ChildItem -Force $PublishDir | ForEach-Object {
