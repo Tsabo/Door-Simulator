@@ -102,13 +102,15 @@ else
                             }
                         </MudSelect>
 
-                        <MudSwitch T="bool" @bind-Value="_form.OsdpAckManufacturerCommand"
-                                   Color="Color.Warning"
-                                   Class="mt-3"
-                                   Label="ACK manufacturer-specific (osdp_MFG) commands" />
-                        <MudText Typo="Typo.caption" Class="mb-4" Style="display:block;">
-                            On (default): reply Ack. Off: reply Nak (unsupported command).
-                        </MudText>
+                        <MudSelect T="bool" @bind-Value="_form.OsdpNakManufacturerCommand"
+                                   Label="Manufacturer-specific (osdp_MFG) command reply"
+                                   HelperText="DoorSim doesn't implement any vendor extension either way — this only controls which reply it sends back."
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            <MudSelectItem T="bool" Value="false">Ack (default)</MudSelectItem>
+                            <MudSelectItem T="bool" Value="true">Nak (unsupported command)</MudSelectItem>
+                        </MudSelect>
                     }
 
                     <!-- Door Contact (DPS) Section -->

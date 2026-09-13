@@ -20,14 +20,14 @@ public class DoorConfigEntity
     public int? ModbusTcpPort { get; set; }
     public bool DpsNormallyOpen { get; set; }
     public bool RexNormallyOpen { get; set; }
-    public bool OsdpAckManufacturerCommand { get; set; }
+    public bool OsdpNakManufacturerCommand { get; set; }
 
     public DoorConfiguration ToDto() => new(
         Id, Label,
         Enum.TryParse<ProtocolType>(Protocol, true, out var proto) ? proto : ProtocolType.Wiegand,
         D0Pin, D1Pin, OsdpAddress, OsdpSerialPort, OsdpBaudRate, DpsPin, RexPin,
         ModbusSerialPort, ModbusUnitId, DpsModbusChannel, RexModbusChannel,
-        ModbusTcpHost, ModbusTcpPort, DpsNormallyOpen, RexNormallyOpen, OsdpAckManufacturerCommand);
+        ModbusTcpHost, ModbusTcpPort, DpsNormallyOpen, RexNormallyOpen, OsdpNakManufacturerCommand);
 
     public static DoorConfigEntity FromDto(DoorConfiguration dto) => new()
     {
@@ -49,6 +49,6 @@ public class DoorConfigEntity
         ModbusTcpPort    = dto.ModbusTcpPort,
         DpsNormallyOpen  = dto.DpsNormallyOpen,
         RexNormallyOpen  = dto.RexNormallyOpen,
-        OsdpAckManufacturerCommand = dto.OsdpAckManufacturerCommand,
+        OsdpNakManufacturerCommand = dto.OsdpNakManufacturerCommand,
     };
 }

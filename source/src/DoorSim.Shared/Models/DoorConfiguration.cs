@@ -10,10 +10,12 @@ namespace DoorSim.Shared.Models;
 /// RTU path: ModbusSerialPort + ModbusUnitId.
 /// TCP path: ModbusTcpHost (+ optional ModbusTcpPort, default 502) + ModbusUnitId.
 /// When ModbusTcpHost is set it takes precedence over ModbusSerialPort for relay control.
-/// OsdpAckManufacturerCommand controls the reply to an incoming osdp_MFG command: true
+/// OsdpNakManufacturerCommand controls the reply to an incoming osdp_MFG command: false
 /// (default) ACKs it, since some panels appear to abandon the session after a NAK to an
-/// unsupported vendor command; false NAKs it as unsupported instead, matching a real PD
-/// with no vendor extension implemented.
+/// unsupported vendor command; true NAKs it as unsupported instead, matching a real PD with
+/// no vendor extension implemented. Named for the non-default (Nak) case so that a column
+/// SQLite adds to pre-existing rows — always defaulted to false — lands on the correct
+/// default (Ack) automatically, with no backfill needed.
 /// </summary>
 public record DoorConfiguration(
     int Id,
@@ -34,4 +36,4 @@ public record DoorConfiguration(
     int? ModbusTcpPort,
     bool DpsNormallyOpen = false,
     bool RexNormallyOpen = false,
-    bool OsdpAckManufacturerCommand = true);
+    bool OsdpNakManufacturerCommand = false);

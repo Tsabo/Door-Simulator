@@ -42,7 +42,7 @@ public partial class DoorConfig
             OsdpAddress = door.OsdpAddress,
             OsdpSerialPort = door.OsdpSerialPort,
             OsdpBaudRate = door.OsdpBaudRate,
-            OsdpAckManufacturerCommand = door.OsdpAckManufacturerCommand,
+            OsdpNakManufacturerCommand = door.OsdpNakManufacturerCommand,
             HasDps = door.DpsPin.HasValue || door.DpsModbusChannel.HasValue,
             DpsPin = door.DpsPin,
             DpsModeIsModbus = door.DpsModbusChannel.HasValue,
@@ -114,7 +114,7 @@ public partial class DoorConfig
                     : null,
                 DpsNormallyOpen: _form is { HasDps: true, DpsNormallyOpen: true },
                 RexNormallyOpen: _form is { HasRex: true, RexNormallyOpen: true },
-                OsdpAckManufacturerCommand: _form.Protocol == ProtocolType.Osdp && _form.OsdpAckManufacturerCommand,
+                OsdpNakManufacturerCommand: _form.Protocol == ProtocolType.Osdp && _form.OsdpNakManufacturerCommand,
                 ModbusSerialPort: anyModbus && !_form.ModbusTransportIsTcp
                     ? _form.ModbusSerialPort
                     : null,
@@ -236,7 +236,7 @@ public partial class DoorConfig
         public byte? OsdpAddress { get; set; }
         public string? OsdpSerialPort { get; set; }
         public int? OsdpBaudRate { get; set; }
-        public bool OsdpAckManufacturerCommand { get; set; } = true;
+        public bool OsdpNakManufacturerCommand { get; set; }
         public bool HasDps { get; set; }
         public int? DpsPin { get; set; }
         public bool DpsModeIsModbus { get; set; }

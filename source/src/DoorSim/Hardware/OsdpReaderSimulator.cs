@@ -68,7 +68,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
                 _baudRate,
                 () => _isDoorOpen,
                 () => _isRexActive,
-                config.OsdpAckManufacturerCommand);
+                !config.OsdpNakManufacturerCommand);
 
             _ = StartListeningAsync(config.OsdpSerialPort, loggerFactory);
         }
