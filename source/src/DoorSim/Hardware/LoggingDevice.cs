@@ -89,11 +89,7 @@ internal sealed class LoggingDevice : Device
 
     protected override PayloadData HandleReaderLEDControl(ReaderLedControls controls)
     {
-        _logger.LogInformation(
-            "Door {Id} ({Label}): CP sent osdp_LED — panel is responding to a card event: {Controls}",
-            _doorId, _label, controls);
-
-        var led0 = controls.Controls.FirstOrDefault(c => c.LedNumber == 0)
+        var led0 = controls.Controls.FirstOrDefault(p => p.LedNumber == 0)
                    ?? controls.Controls.FirstOrDefault();
         if (led0 is null)
             return new Ack();
@@ -103,21 +99,43 @@ internal sealed class LoggingDevice : Device
         oldCts.Cancel();
         oldCts.Dispose();
 
-        // Permanent state — what the reader shows when no temporary override is active.
-        var permColor  = MapLedColor(led0.PermanentOnColor);
-        var permBlink  = led0.PermanentOffTime > 0
-                         && led0.PermanentMode == PermanentReaderControlCode.SetPermanentState;
-        var permanentState = new ReaderLedState(permColor, permBlink, _ledState.BuzzerActive);
+        var isTemp = led0 is
+        {
+            TemporaryMode: TemporaryReaderControlCode.SetTemporaryAndStartTimer,
+            TemporaryTimer: > 0,
+        };
+        var tempVisibleBlink = ShouldVisiblyBlink(led0.TemporaryOnColor, led0.TemporaryOffColor, led0.TemporaryOffTime);
+        var permVisibleBlink = led0.PermanentMode == PermanentReaderControlCode.SetPermanentState
+                               && ShouldVisiblyBlink(led0.PermanentOnColor, led0.PermanentOffColor, led0.PermanentOffTime);
 
-        var isTemp = led0.TemporaryMode == TemporaryReaderControlCode.SetTemporaryAndStartTimer
-                     && led0.TemporaryTimer > 0;
+        _logger.LogInformation(
+            "Door {Id} ({Label}): osdp_LED led={Led} tmp(mode={TmpMode},timer={TmpTimer},on={TmpOn},off={TmpOff},offTime={TmpOffTime},blink={TmpBlink}) perm(mode={PermMode},on={PermOn},off={PermOff},offTime={PermOffTime},blink={PermBlink})",
+            _doorId,
+            _label,
+            led0.LedNumber,
+            led0.TemporaryMode,
+            led0.TemporaryTimer,
+            led0.TemporaryOnColor,
+            led0.TemporaryOffColor,
+            led0.TemporaryOffTime,
+            tempVisibleBlink,
+            led0.PermanentMode,
+            led0.PermanentOnColor,
+            led0.PermanentOffColor,
+            led0.PermanentOffTime,
+            permVisibleBlink);
+
+        // Permanent state — render as steady color in the mock UI.
+        // Panels often use permanent blink patterns as heartbeat/idle signals, which causes
+        // "always blinking" readers in the simulator and masks temporary card feedback.
+        var permColor = MapLedColor(led0.PermanentOnColor);
+        var permanentState = new ReaderLedState(permColor, false, _ledState.BuzzerActive);
 
         if (isTemp)
         {
             // Show the temporary (flash) color immediately …
             var tempColor = MapLedColor(led0.TemporaryOnColor);
-            var tempBlink = led0.TemporaryOffTime > 0;
-            _ledState = new ReaderLedState(tempColor, tempBlink, _ledState.BuzzerActive);
+            _ledState = new ReaderLedState(tempColor, tempVisibleBlink, _ledState.BuzzerActive);
 
             // … then revert to the permanent state after TemporaryTimer × 100 ms.
             var revertMs  = led0.TemporaryTimer * 100;
@@ -210,6 +228,12 @@ internal sealed class LoggingDevice : Device
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    // The simulator UI can render a single color + optional blink; it cannot display
+    // alternating two-color patterns. Treat blink as a visible pulse only when the
+    // panel cycles from a lit color to black.
+    private static bool ShouldVisiblyBlink(LedColor onColor, LedColor offColor, byte offTime) =>
+        offTime > 0 && onColor != LedColor.Black && offColor == LedColor.Black;
 
     private static OsdpLedColor MapLedColor(LedColor c) => c switch
     {

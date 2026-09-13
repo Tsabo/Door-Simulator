@@ -24,7 +24,7 @@ public partial class Metrics : IDisposable
     private SimulationMetricsSummary? _summary;
     private int _windowMinutes = 60;
 
-    private DoorMetrics? _busiest => _summary?.PerDoor.MaxBy(d => d.Total);
+    private DoorMetrics? _busiest => _summary?.PerDoor.MaxBy(p => p.Total);
 
     public void Dispose()
     {
@@ -78,7 +78,7 @@ public partial class Metrics : IDisposable
             _recent = await MetricsClient.GetRecentEventsAsync(100, _doorFilter);
             _connectivity = _summary?.Connectivity ?? [];
             _maxHeat = _heatmap.Length > 0
-                ? _heatmap.Max(c => c.Count)
+                ? _heatmap.Max(p => p.Count)
                 : 0;
 
             BuildChart();
@@ -97,8 +97,8 @@ public partial class Metrics : IDisposable
     {
         _chartSeries =
         [
-            new ChartSeries<double>([.. _series.Select(b => (double)b.Total)]) { Name = "Total" },
-            new ChartSeries<double>([.. _series.Select(b => (double)b.Error)]) { Name = "Errors" },
+            new ChartSeries<double>([.. _series.Select(p => (double)p.Total)]) { Name = "Total" },
+            new ChartSeries<double>([.. _series.Select(p => (double)p.Error)]) { Name = "Errors" },
         ];
 
         // Only label a handful of points, or the axis becomes an unreadable smear.
@@ -142,7 +142,7 @@ public partial class Metrics : IDisposable
     }
 
     private int HeatCount(int day, int hour) =>
-        _heatmap.FirstOrDefault(c => c.DayOfWeek == day && c.Hour == hour)?.Count ?? 0;
+        _heatmap.FirstOrDefault(p => p.DayOfWeek == day && p.Hour == hour)?.Count ?? 0;
 
     private string HeatStyle(int count)
     {

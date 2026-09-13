@@ -1,0 +1,31 @@
+.heatmap {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow-x: auto;
+}
+
+.heatmap-row {
+    display: grid;
+    grid-template-columns: 3rem repeat(24, minmax(14px, 1fr));
+    gap: 3px;
+    align-items: center;
+}
+
+.heatmap-day {
+    font-size: .7rem;
+    opacity: .7;
+}
+
+.heatmap-hour {
+    font-size: .7rem;
+    opacity: .7;
+    text-align: left;
+}
+
+.heatmap-cell {
+    display: block;
+    aspect-ratio: 1;
+    border-radius: 2px;
+    min-height: 14px;
+}
