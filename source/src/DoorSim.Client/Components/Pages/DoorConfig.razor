@@ -101,6 +101,13 @@ else
                                 <MudSelectItem T="int?" Value="@((int?)baud)">@baud</MudSelectItem>
                             }
                         </MudSelect>
+
+                        <MudSwitch T="bool" @bind-Value="_form.OsdpAckManufacturerCommand"
+                                   Color="Color.Warning"
+                                   Class="mt-3"
+                                   Label="@(_form.OsdpAckManufacturerCommand
+                                       ? "ACK manufacturer-specific (osdp_MFG) commands (default)"
+                                       : "NAK manufacturer-specific (osdp_MFG) commands")" />
                     }
 
                     <!-- Door Contact (DPS) Section -->

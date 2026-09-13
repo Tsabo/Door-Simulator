@@ -67,7 +67,8 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
             _device = new LoggingDevice(deviceConfig, loggerFactory, config.Id, config.Label,
                 _baudRate,
                 () => _isDoorOpen,
-                () => _isRexActive);
+                () => _isRexActive,
+                config.OsdpAckManufacturerCommand);
 
             _ = StartListeningAsync(config.OsdpSerialPort, loggerFactory);
         }

@@ -81,6 +81,7 @@ public class DoorConfigService(DoorSimDbContext db)
         entity.ModbusTcpPort = dto.ModbusTcpPort;
         entity.DpsNormallyOpen = dto.DpsNormallyOpen;
         entity.RexNormallyOpen = dto.RexNormallyOpen;
+        entity.OsdpAckManufacturerCommand = dto.OsdpAckManufacturerCommand;
 
         await db.SaveChangesAsync().ConfigureAwait(false);
         return (entity.ToDto(), null);

@@ -21,6 +21,7 @@ internal sealed class LoggingDevice : Device
     private readonly string _label;
     private readonly byte _osdpAddress;
     private readonly int _baudRate;
+    private readonly bool _ackManufacturerCommand;
 
     // Volatile reference ensures the latest state is visible across threads without locking.
     // ReaderLedState is an immutable record so partial reads are impossible.
@@ -53,7 +54,8 @@ internal sealed class LoggingDevice : Device
         string label,
         int baudRate,
         Func<bool> getDoorOpen,
-        Func<bool> getRexActive)
+        Func<bool> getRexActive,
+        bool ackManufacturerCommand = false)
         : base(config, loggerFactory)
     {
         _logger      = loggerFactory.CreateLogger<LoggingDevice>();
@@ -63,6 +65,7 @@ internal sealed class LoggingDevice : Device
         _getRexActive = getRexActive;
         _osdpAddress  = config.Address;
         _baudRate     = baudRate;
+        _ackManufacturerCommand = ackManufacturerCommand;
     }
 
     // -------------------------------------------------------------------------
@@ -197,7 +200,7 @@ internal sealed class LoggingDevice : Device
             _doorId, _label,
             BitConverter.ToString(commandPayload.VendorCode),
             BitConverter.ToString(commandPayload.Data));
-        return new Ack();
+        return _ackManufacturerCommand ? new Ack() : new Nak(ErrorCode.UnknownCommandCode);
     }
 
     // -------------------------------------------------------------------------
