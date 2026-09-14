@@ -1,0 +1,274 @@
+@inject DoorApiClient Doors
+
+<MudDialog>
+    <DialogContent>
+        <MudTabs @bind-ActivePanelIndex="_activeTabIndex" Elevation="0" Rounded="true">
+            <MudTabPanel Text="General">
+                <MudTextField @bind-Value="_form.Label"
+                              Label="Label"
+                              Placeholder="e.g. Main Entry"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Class="mb-4 mt-4" />
+
+                <MudSelect T="ProtocolType" @bind-Value="_form.Protocol"
+                           Label="Protocol"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="mb-4">
+                    @foreach (var proto in Enum.GetValues<ProtocolType>())
+                    {
+                        <MudSelectItem Value="@proto">@proto</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @if (_form.Protocol == ProtocolType.Wiegand)
+                {
+                    <MudNumericField T="int?" @bind-Value="_form.D0Pin"
+                                     Label="D0 Pin (BCM)"
+                                     Min="0"
+                                     Max="27"
+                                     Placeholder="e.g. 4"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Class="mb-4" />
+
+                    <MudNumericField T="int?" @bind-Value="_form.D1Pin"
+                                     Label="D1 Pin (BCM)"
+                                     Min="0"
+                                     Max="27"
+                                     Placeholder="e.g. 27"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Class="mb-4" />
+                }
+                else
+                {
+                    <MudNumericField T="byte?" @bind-Value="_form.OsdpAddress"
+                                     Label="OSDP Address (0–127)"
+                                     Min="0"
+                                     Max="127"
+                                     Placeholder="e.g. 0"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Class="mb-4" />
+
+                    <MudSelect T="string" @bind-Value="_form.OsdpSerialPort"
+                               Label="Serial Port"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Class="mb-4">
+                        @if (!string.IsNullOrWhiteSpace(_form.OsdpSerialPort) && !_availableSerialPorts.Any(p => string.Equals(p, _form.OsdpSerialPort, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            <MudSelectItem Value="@_form.OsdpSerialPort">@_form.OsdpSerialPort (not detected)</MudSelectItem>
+                        }
+                        @foreach (var port in _availableSerialPorts)
+                        {
+                            <MudSelectItem Value="@port">@port</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudSelect T="int?" @bind-Value="_form.OsdpBaudRate"
+                               Label="Baud Rate"
+                               HelperText="Leave as default unless both the panel and the adapter channel support the chosen rate."
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Class="mb-4">
+                        <MudSelectItem T="int?" Value="@((int?)null)">Default (@OsdpBaudRates.Default)</MudSelectItem>
+                        @foreach (var baud in OsdpBaudRates.Supported)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)baud)">@baud</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudSelect T="bool" @bind-Value="_form.OsdpNakManufacturerCommand"
+                               Label="Manufacturer-specific (osdp_MFG) command reply"
+                               HelperText="DoorSim doesn't implement any vendor extension either way — this only controls which reply it sends back."
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Class="mb-4">
+                        <MudSelectItem T="bool" Value="false">Ack (default)</MudSelectItem>
+                        <MudSelectItem T="bool" Value="true">Nak (unsupported command)</MudSelectItem>
+                    </MudSelect>
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="Door Contact (DPS)">
+                <MudCheckBox T="bool" Value="@_form.HasDps"
+                             ValueChanged="OnHasDpsChanged"
+                             Label="Door Contact (DPS)"
+                             Class="mb-4 mt-4" />
+
+                @if (_form.HasDps)
+                {
+                    <MudRadioGroup T="bool" Value="@_form.DpsModeIsModbus"
+                                   ValueChanged="OnDpsModeChanged"
+                                   Class="mb-4">
+                        <MudRadio T="bool" Value="false" Color="Color.Primary" Class="mb-2">
+                            GPIO Pin
+                        </MudRadio>
+                        <MudRadio T="bool" Value="true" Color="Color.Primary">
+                            Modbus Relay
+                        </MudRadio>
+                    </MudRadioGroup>
+
+                    @if (!_form.DpsModeIsModbus)
+                    {
+                        <MudNumericField T="int?" @bind-Value="_form.DpsPin"
+                                         Label="DPS Pin (BCM)"
+                                         Min="0"
+                                         Max="27"
+                                         Placeholder="e.g. 21"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+                    }
+                    else
+                    {
+                        <MudNumericField T="int?" @bind-Value="_form.DpsModbusChannel"
+                                         Label="DPS Channel (0–15)"
+                                         Min="0"
+                                         Max="15"
+                                         Placeholder="e.g. 0"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+                    }
+
+                    <MudSwitch T="bool" @bind-Value="_form.DpsNormallyOpen"
+                               Color="Color.Warning"
+                               Label="@(_form.DpsNormallyOpen ? "Normally Open — Fail Safe" : "Normally Closed — Fail Secure")" />
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="REX">
+                <MudCheckBox T="bool" Value="@_form.HasRex"
+                             ValueChanged="OnHasRexChanged"
+                             Label="REX Relay"
+                             Class="mb-4 mt-4" />
+
+                @if (_form.HasRex)
+                {
+                    <MudRadioGroup T="bool" Value="@_form.RexModeIsModbus"
+                                   ValueChanged="OnRexModeChanged"
+                                   Class="mb-4">
+                        <MudRadio T="bool" Value="false" Color="Color.Primary" Class="mb-2">
+                            GPIO Pin
+                        </MudRadio>
+                        <MudRadio T="bool" Value="true" Color="Color.Primary">
+                            Modbus Relay
+                        </MudRadio>
+                    </MudRadioGroup>
+
+                    @if (!_form.RexModeIsModbus)
+                    {
+                        <MudNumericField T="int?" @bind-Value="_form.RexPin"
+                                         Label="REX Pin (BCM)"
+                                         Min="0"
+                                         Max="27"
+                                         Placeholder="e.g. 13"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+                    }
+                    else
+                    {
+                        <MudNumericField T="int?" @bind-Value="_form.RexModbusChannel"
+                                         Label="REX Channel (0–15)"
+                                         Min="0"
+                                         Max="15"
+                                         Placeholder="e.g. 1"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+                    }
+
+                    <MudSwitch T="bool" @bind-Value="_form.RexNormallyOpen"
+                               Color="Color.Warning"
+                               Label="@(_form.RexNormallyOpen ? "Normally Open — Fail Safe" : "Normally Closed — Fail Secure")" />
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="Relay Board" Disabled="@(!AnyModbus)">
+                <MudText Typo="Typo.body2" Color="Color.Tertiary" Class="mb-4 mt-4">
+                    Shared by DPS and REX when either is set to Modbus Relay — one physical board, addressed by channel.
+                </MudText>
+
+                <MudRadioGroup T="bool" Value="@_form.ModbusTransportIsTcp"
+                               ValueChanged="OnModbusTransportChanged"
+                               Class="mb-4">
+                    <MudRadio T="bool" Value="false" Color="Color.Primary" Class="mb-2">
+                        RTU (RS-485 serial)
+                    </MudRadio>
+                    <MudRadio T="bool" Value="true" Color="Color.Primary">
+                        TCP (Ethernet)
+                    </MudRadio>
+                </MudRadioGroup>
+
+                @if (!_form.ModbusTransportIsTcp)
+                {
+                    <MudSelect T="string" @bind-Value="_form.ModbusSerialPort"
+                               Label="Serial Port"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Class="mb-4">
+                        @if (!string.IsNullOrWhiteSpace(_form.ModbusSerialPort) && !_availableSerialPorts.Any(p => string.Equals(p, _form.ModbusSerialPort, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            <MudSelectItem Value="@_form.ModbusSerialPort">@_form.ModbusSerialPort (not detected)</MudSelectItem>
+                        }
+                        @foreach (var port in _availableSerialPorts)
+                        {
+                            <MudSelectItem Value="@port">@port</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                else
+                {
+                    <MudTextField @bind-Value="_form.ModbusTcpHost"
+                                  Label="Host / IP"
+                                  Placeholder="e.g. 192.168.1.100"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Class="mb-4" />
+
+                    <MudNumericField T="int?" @bind-Value="_form.ModbusTcpPort"
+                                     Label="Port (default 502)"
+                                     Min="1"
+                                     Max="65535"
+                                     Placeholder="502"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Class="mb-4" />
+                }
+
+                <MudNumericField T="byte?" @bind-Value="_form.ModbusUnitId"
+                                 Label="Unit ID (1–247)"
+                                 Min="1"
+                                 Max="247"
+                                 Placeholder="e.g. 1"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense" />
+            </MudTabPanel>
+        </MudTabs>
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-4">
+                @_error
+            </MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="SaveAsync"
+                   Disabled="@_saving">
+            @(_saving ? "Saving…" : (Editing is null ? "Add" : "Save"))
+        </MudButton>
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Default"
+                   OnClick="Cancel">
+            Cancel
+        </MudButton>
+    </DialogActions>
+</MudDialog>
