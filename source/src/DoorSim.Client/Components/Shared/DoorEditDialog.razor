@@ -11,7 +11,8 @@
                               Margin="Margin.Dense"
                               Class="mb-4 mt-4" />
 
-                <MudSelect T="ProtocolType" @bind-Value="_form.Protocol"
+                <MudSelect T="ProtocolType" Value="@_form.Protocol"
+                           ValueChanged="OnProtocolChanged"
                            Label="Protocol"
                            Variant="Variant.Outlined"
                            Margin="Margin.Dense"
@@ -45,9 +46,9 @@
                 else
                 {
                     <MudNumericField T="byte?" @bind-Value="_form.OsdpAddress"
-                                     Label="OSDP Address (0–127)"
+                                     Label="OSDP Address (0–126)"
                                      Min="0"
-                                     Max="127"
+                                     Max="126"
                                      Placeholder="e.g. 0"
                                      Variant="Variant.Outlined"
                                      Margin="Margin.Dense"
@@ -81,16 +82,325 @@
                         }
                     </MudSelect>
 
-                    <MudSelect T="bool" @bind-Value="_form.OsdpNakManufacturerCommand"
-                               Label="Manufacturer-specific (osdp_MFG) command reply"
-                               HelperText="DoorSim doesn't implement any vendor extension either way — this only controls which reply it sends back."
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               Class="mb-4">
-                        <MudSelectItem T="bool" Value="false">Ack (default)</MudSelectItem>
-                        <MudSelectItem T="bool" Value="true">Nak (unsupported command)</MudSelectItem>
-                    </MudSelect>
                 }
+            </MudTabPanel>
+
+            <MudTabPanel Text="Advanced OSDP" Disabled="@(_form.Protocol != ProtocolType.Osdp)">
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4 mt-4">
+                    These settings change only what the PD <b>declares</b> to the panel. DoorSim's actual
+                    behaviour is unchanged — declaring a capability it doesn't implement is a deliberate
+                    negative-test tool. Leave a field blank to use the simulator default.
+                </MudAlert>
+
+                <MudExpansionPanels MultiExpansion="true" Elevation="0">
+
+                    <MudExpansionPanel Text="Advertised Capabilities (osdp_CAP)">
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Already advertised — tune the declared level</MudText>
+
+                        <MudSelect T="byte?" @bind-Value="_form.OsdpCapCardDataFormatCompliance"
+                                   Label="Card data format"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            <MudSelectItem T="byte?" Value="@((byte?)null)">Default (@DefaultLevelLabel(OsdpAdvancedDefaults.CardDataFormatLevels, OsdpAdvancedDefaults.CardDataFormatCompliance))</MudSelectItem>
+                            @foreach (var level in OsdpAdvancedDefaults.CardDataFormatLevels)
+                            {
+                                <MudSelectItem T="byte?" Value="@((byte?)level.Value)">@level.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudSelect T="byte?" @bind-Value="_form.OsdpCapLedControlCompliance"
+                                   Label="Reader LED control"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            <MudSelectItem T="byte?" Value="@((byte?)null)">Default (@DefaultLevelLabel(OsdpAdvancedDefaults.LedControlLevels, OsdpAdvancedDefaults.LedControlCompliance))</MudSelectItem>
+                            @foreach (var level in OsdpAdvancedDefaults.LedControlLevels)
+                            {
+                                <MudSelectItem T="byte?" Value="@((byte?)level.Value)">@level.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudNumericField T="byte?" @bind-Value="_form.OsdpCapLedsPerReader"
+                                         Label="LEDs per reader"
+                                         Min="1"
+                                         Max="255"
+                                         Placeholder="@OsdpAdvancedDefaults.LedsPerReader.ToString()"
+                                         HelperText="Declared only. DoorSim drives a single LED regardless."
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudSelect T="byte?" @bind-Value="_form.OsdpCapCheckCharacterCompliance"
+                                   Label="Check character support"
+                                   Adornment="Adornment.Start"
+                                   AdornmentIcon="@Icons.Material.Filled.Warning"
+                                   AdornmentColor="Color.Warning"
+                                   HelperText="Declaration only — DoorSim always accepts CRC-16. A panel that honours a checksum-only declaration may switch framing and the link will drop."
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            <MudSelectItem T="byte?" Value="@((byte?)null)">Default (@DefaultLevelLabel(OsdpAdvancedDefaults.CheckCharacterLevels, OsdpAdvancedDefaults.CheckCharacterCompliance))</MudSelectItem>
+                            @foreach (var level in OsdpAdvancedDefaults.CheckCharacterLevels)
+                            {
+                                <MudSelectItem T="byte?" Value="@((byte?)level.Value)">@level.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudDivider Class="mb-4" />
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Not advertised by default — pick a level to declare</MudText>
+
+                        <MudSelect T="byte?" @bind-Value="_form.OsdpCapContactStatusCompliance"
+                                   Label="Contact status monitoring"
+                                   HelperText="DoorSim reports two inputs (DPS, REX) whatever it declares."
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            <MudSelectItem T="byte?" Value="@((byte?)null)">Not advertised (default)</MudSelectItem>
+                            @foreach (var level in OsdpAdvancedDefaults.ContactStatusLevels)
+                            {
+                                <MudSelectItem T="byte?" Value="@((byte?)level.Value)">@level.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudNumericField T="byte?" @bind-Value="_form.OsdpCapContactStatusInputs"
+                                         Label="Declared input count"
+                                         Min="1"
+                                         Max="255"
+                                         Placeholder="@OsdpAdvancedDefaults.ContactStatusInputs.ToString()"
+                                         Disabled="@(_form.OsdpCapContactStatusCompliance is null)"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudSelect T="byte?" @bind-Value="_form.OsdpCapOutputControlCompliance"
+                                   Label="Output control"
+                                   HelperText="DoorSim acknowledges osdp_OUT but drives nothing."
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            <MudSelectItem T="byte?" Value="@((byte?)null)">Not advertised (default)</MudSelectItem>
+                            @foreach (var level in OsdpAdvancedDefaults.OutputControlLevels)
+                            {
+                                <MudSelectItem T="byte?" Value="@((byte?)level.Value)">@level.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudNumericField T="byte?" @bind-Value="_form.OsdpCapOutputControlCount"
+                                         Label="Declared output count"
+                                         Min="1"
+                                         Max="255"
+                                         Placeholder="@OsdpAdvancedDefaults.OutputControlCount.ToString()"
+                                         Disabled="@(_form.OsdpCapOutputControlCompliance is null)"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudSelect T="byte?" @bind-Value="_form.OsdpCapAudibleOutputCompliance"
+                                   Label="Reader audible output"
+                                   HelperText="Backed for real — DoorSim already handles osdp_BUZ and drives the mock buzzer."
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            <MudSelectItem T="byte?" Value="@((byte?)null)">Not advertised (default)</MudSelectItem>
+                            @foreach (var level in OsdpAdvancedDefaults.AudibleOutputLevels)
+                            {
+                                <MudSelectItem T="byte?" Value="@((byte?)level.Value)">@level.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudSelect T="byte?" @bind-Value="_form.OsdpCapTextOutputCompliance"
+                                   Label="Reader text output"
+                                   HelperText="DoorSim logs osdp_TEXT but renders nothing. Declaring level 0 is different from not advertising at all."
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            <MudSelectItem T="byte?" Value="@((byte?)null)">Not advertised (default)</MudSelectItem>
+                            @foreach (var level in OsdpAdvancedDefaults.TextOutputLevels)
+                            {
+                                <MudSelectItem T="byte?" Value="@((byte?)level.Value)">@level.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudNumericField T="byte?" @bind-Value="_form.OsdpCapTextOutputDisplays"
+                                         Label="Declared display count"
+                                         Min="0"
+                                         Max="255"
+                                         Placeholder="@OsdpAdvancedDefaults.TextOutputDisplays.ToString()"
+                                         Disabled="@(_form.OsdpCapTextOutputCompliance is null)"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudDivider Class="mb-4" />
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Secure channel (declaration only)</MudText>
+
+                        <MudSwitch T="bool" @bind-Value="_form.OsdpCapDeclareAes128"
+                                   Color="Color.Warning"
+                                   Label="Declare AES-128 support"
+                                   Class="mb-2" />
+
+                        <MudText Typo="Typo.caption" Class="mb-4 d-block">
+                            Declaration only — cosmetic. DoorSim keeps <code>RequireSecurity = false</code> and will
+                            not negotiate a secure channel (SCS); it has no SCBK. Use this to see how a panel reacts
+                            to a PD that <i>claims</i> AES-128.
+                        </MudText>
+
+                        <MudSwitch T="bool" @bind-Value="_form.OsdpCapDeclareDefaultAesKey"
+                                   Color="Color.Warning"
+                                   Label="Declare the default AES-128 key"
+                                   Disabled="@(!_form.OsdpCapDeclareAes128)"
+                                   Class="mb-4" />
+
+                        <MudDivider Class="mb-4" />
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Declaration-only extras</MudText>
+
+                        <MudNumericField T="int?" @bind-Value="_form.OsdpCapReceiveBufferSize"
+                                         Label="Receive buffer size (bytes)"
+                                         Min="@OsdpAdvancedDefaults.MinMessageSize"
+                                         Max="@OsdpAdvancedDefaults.MaxMessageSize"
+                                         Placeholder="Not advertised"
+                                         HelperText="Sent as a 16-bit value split across the two capability bytes."
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudNumericField T="int?" @bind-Value="_form.OsdpCapLargestCombinedMessageSize"
+                                         Label="Largest combined message size (bytes)"
+                                         Min="@OsdpAdvancedDefaults.MinMessageSize"
+                                         Max="@OsdpAdvancedDefaults.MaxMessageSize"
+                                         Placeholder="Not advertised"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudSelect T="byte?" @bind-Value="_form.OsdpCapOsdpVersion"
+                                   Label="OSDP version"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            <MudSelectItem T="byte?" Value="@((byte?)null)">Not advertised (default)</MudSelectItem>
+                            @foreach (var level in OsdpAdvancedDefaults.OsdpVersionLevels)
+                            {
+                                <MudSelectItem T="byte?" Value="@((byte?)level.Value)">@level.Label</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudNumericField T="byte?" @bind-Value="_form.OsdpCapDownstreamReaders"
+                                         Label="Downstream readers"
+                                         Min="0"
+                                         Max="255"
+                                         Placeholder="Not advertised"
+                                         HelperText="Declared count of attached downstream readers."
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense" />
+                    </MudExpansionPanel>
+
+                    <MudExpansionPanel Text="Device Identity (osdp_ID)">
+                        <MudTextField @bind-Value="_form.OsdpIdVendorCode"
+                                      Label="Vendor code"
+                                      Placeholder="@OsdpAdvancedDefaults.VendorCodeText"
+                                      HelperText="Three hex bytes. Accepts 00-00-01, 00 00 01 or 000001."
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Class="mb-4" />
+
+                        <MudNumericField T="byte?" @bind-Value="_form.OsdpIdModelNumber"
+                                         Label="Model number"
+                                         Min="0"
+                                         Max="255"
+                                         Placeholder="@OsdpAdvancedDefaults.ModelNumber.ToString()"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudNumericField T="byte?" @bind-Value="_form.OsdpIdHardwareVersion"
+                                         Label="Hardware version"
+                                         Min="0"
+                                         Max="255"
+                                         Placeholder="@OsdpAdvancedDefaults.HardwareVersion.ToString()"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudNumericField T="int?" @bind-Value="_form.OsdpIdSerialNumber"
+                                         Label="Serial number"
+                                         Placeholder="(door id)"
+                                         HelperText="Also used as the connection cUID serial number."
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudNumericField T="byte?" @bind-Value="_form.OsdpIdFirmwareMajor"
+                                         Label="Firmware major"
+                                         Min="0"
+                                         Max="255"
+                                         Placeholder="@OsdpAdvancedDefaults.FirmwareMajor.ToString()"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudNumericField T="byte?" @bind-Value="_form.OsdpIdFirmwareMinor"
+                                         Label="Firmware minor"
+                                         Min="0"
+                                         Max="255"
+                                         Placeholder="@OsdpAdvancedDefaults.FirmwareMinor.ToString()"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudNumericField T="byte?" @bind-Value="_form.OsdpIdFirmwareBuild"
+                                         Label="Firmware build"
+                                         Min="0"
+                                         Max="255"
+                                         Placeholder="@OsdpAdvancedDefaults.FirmwareBuild.ToString()"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense" />
+                    </MudExpansionPanel>
+
+                    <MudExpansionPanel Text="Protocol Behaviour &amp; Timing">
+                        <MudSelect T="bool" @bind-Value="_form.OsdpNakManufacturerCommand"
+                                   Label="Manufacturer-specific (osdp_MFG) command reply"
+                                   HelperText="DoorSim doesn't implement any vendor extension either way — this only controls which reply it sends back."
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            <MudSelectItem T="bool" Value="false">Ack (default)</MudSelectItem>
+                            <MudSelectItem T="bool" Value="true">Nak (unsupported command)</MudSelectItem>
+                        </MudSelect>
+
+                        <MudSelect T="OsdpComsetBehavior" @bind-Value="_form.OsdpComsetHandling"
+                                   Label="Address change (osdp_COMSET) reply"
+                                   HelperText="Accepting an address change takes effect on the next connection, never applies the requested baud rate, and does not update the stored door configuration."
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-4">
+                            <MudSelectItem T="OsdpComsetBehavior" Value="OsdpComsetBehavior.Ignore">Ignore — reply with actual settings (default)</MudSelectItem>
+                            <MudSelectItem T="OsdpComsetBehavior" Value="OsdpComsetBehavior.AcceptAddress">Accept — reply with requested settings</MudSelectItem>
+                            <MudSelectItem T="OsdpComsetBehavior" Value="OsdpComsetBehavior.Nak">Nak — declare COMSET unsupported</MudSelectItem>
+                        </MudSelect>
+
+                        <MudNumericField T="int?" @bind-Value="_form.OsdpConnectionTimeoutSeconds"
+                                         Label="Connection timeout (seconds)"
+                                         Min="@OsdpAdvancedDefaults.MinConnectionTimeoutSeconds"
+                                         Max="@OsdpAdvancedDefaults.MaxConnectionTimeoutSeconds"
+                                         Placeholder="@OsdpAdvancedDefaults.ConnectionTimeoutSeconds.ToString()"
+                                         HelperText="How long without a poll before the link counts as down."
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudNumericField T="int?" @bind-Value="_form.OsdpReplyTimeoutMilliseconds"
+                                         Label="Reply timeout (ms)"
+                                         Min="@OsdpAdvancedDefaults.MinReplyTimeoutMilliseconds"
+                                         Max="@OsdpAdvancedDefaults.MaxReplyTimeoutMilliseconds"
+                                         Placeholder="@OsdpAdvancedDefaults.ReplyTimeoutMilliseconds.ToString()"
+                                         HelperText="Inter-byte gap tolerated within one frame. Must be shorter than the connection timeout."
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense" />
+                    </MudExpansionPanel>
+
+                </MudExpansionPanels>
             </MudTabPanel>
 
             <MudTabPanel Text="Door Contact (DPS)">

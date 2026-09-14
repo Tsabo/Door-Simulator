@@ -23,6 +23,52 @@ triggers card reads and door lifecycle events per reader.
 - A REST API as the integration point for the web UI today, and for future
   clients (e.g. a desktop app) that want to drive the same simulator
 
+## Advanced OSDP settings
+
+Each OSDP door has an **Advanced OSDP** tab in its edit dialog that controls the
+PD personality the simulator presents to the panel.
+
+**These settings change only what the PD *declares*. They do not change what
+DoorSim actually does.** Declaring a capability the simulator doesn't implement
+is deliberate — it's how you test what a panel does when a reader claims
+something it can't back up. Leave a field blank to use the simulator default.
+
+Three groups:
+
+- **Advertised capabilities (`osdp_CAP`)** — the compliance level and declared
+  count for each capability. Out of the box DoorSim advertises only card data
+  format, reader LED control, check-character support and communication
+  security. Contact status monitoring, output control, audible output and text
+  output are all implemented but unadvertised, so a panel that gates on
+  `osdp_CAP` never exercises them; declare them here to turn that on. Buffer
+  sizes, OSDP version and downstream reader count are declaration-only.
+- **Device identity (`osdp_ID`)** — vendor code, model number, hardware
+  version, serial number and firmware version, for impersonating a specific
+  vendor's reader. The serial number is also used as the connection cUID.
+- **Protocol behaviour & timing** — the reply to a vendor-specific `osdp_MFG`
+  command, the reply to an `osdp_COMSET` address change, and per-door
+  connection and reply timeouts.
+
+Two settings deserve specific warning:
+
+- **Check-character support level 0** declares "checksum only, no CRC-16", but
+  DoorSim's framing is decided by the incoming message, not by this
+  declaration. A panel that honours it may switch to checksum framing and the
+  link will go silent — which looks like a wiring fault, not a config choice.
+- **AES-128** is declaration only. DoorSim keeps `RequireSecurity = false` and
+  has no SCBK, so it will not negotiate a secure channel no matter what these
+  bits say.
+
+Accepting an `osdp_COMSET` address change takes effect on the *next* connection
+(OSDP.Net updates its device configuration from the reply and the connection
+loop re-reads it), the requested baud rate is echoed back but never applied
+because the listener isn't restarted, and the stored door configuration is not
+updated — so reconcile it by hand. The warning logged on accept names the old
+and new address.
+
+Doors with any non-default advanced setting are flagged in the **Adv** column of
+the door configuration table.
+
 ## Tech stack
 
 - .NET 10, C#

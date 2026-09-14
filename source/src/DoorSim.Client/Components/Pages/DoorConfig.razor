@@ -39,6 +39,7 @@ else
             <MudTh>D0 / Port</MudTh>
             <MudTh>D1 / OSDP Addr</MudTh>
             <MudTh>Baud</MudTh>
+            <MudTh>Adv</MudTh>
             <MudTh>DPS</MudTh>
             <MudTh>REX</MudTh>
             <MudTh Style="text-align:center">Actions</MudTh>
@@ -55,6 +56,23 @@ else
                 @(context.Protocol == ProtocolType.Wiegand ? (context.D1Pin?.ToString() ?? "—") : (context.OsdpAddress?.ToString() ?? "—"))
             </MudTd>
             <MudTd DataLabel="Baud">@FormatBaud(context)</MudTd>
+            <MudTd DataLabel="Adv">
+                @{
+                    var advanced = FormatAdvancedOverrides(context);
+                }
+                @if (advanced is null)
+                {
+                    @("—")
+                }
+                else
+                {
+                    <MudTooltip Text="@($"Non-default advanced OSDP settings: {advanced}")">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning">
+                            @advanced
+                        </MudChip>
+                    </MudTooltip>
+                }
+            </MudTd>
             <MudTd DataLabel="DPS">@FormatContact(context.DpsPin, context.DpsModbusChannel)</MudTd>
             <MudTd DataLabel="REX">@FormatContact(context.RexPin, context.RexModbusChannel)</MudTd>
             <MudTd DataLabel="Actions" Style="text-align:center">
@@ -73,7 +91,7 @@ else
             </MudTd>
         </RowTemplate>
         <NoRecordsContent>
-            <MudTd colspan="8" Style="text-align:center; padding: 24px;">
+            <MudTd colspan="9" Style="text-align:center; padding: 24px;">
                 <MudText Color="Color.Tertiary">No doors configured yet.</MudText>
             </MudTd>
         </NoRecordsContent>

@@ -1,3 +1,5 @@
+using System.IO.Ports;
+
 namespace DoorSim.Services;
 
 /// <summary>
@@ -16,6 +18,7 @@ public class DoorConfigService(DoorSimDbContext db)
     public async Task<DoorConfiguration?> GetAsync(int id)
     {
         var entity = await db.Doors.FindAsync(id).ConfigureAwait(false);
+
         return entity?.ToDto();
     }
 
@@ -34,7 +37,7 @@ public class DoorConfigService(DoorSimDbContext db)
         return
         [
             .. DiscoverSerialPorts()
-                .Where(port => !usedPorts.Contains(port)),
+                .Where(port => !usedPorts.Contains(port))
         ];
     }
 
@@ -43,12 +46,14 @@ public class DoorConfigService(DoorSimDbContext db)
         dto = SanitizeStrings(dto);
 
         var error = await ValidateAsync(dto, null);
+
         if (error is not null)
             return (null, error);
 
         var entity = DoorConfigEntity.FromDto(dto with { Id = 0 });
         db.Doors.Add(entity);
         await db.SaveChangesAsync().ConfigureAwait(false);
+
         return (entity.ToDto(), null);
     }
 
@@ -57,44 +62,35 @@ public class DoorConfigService(DoorSimDbContext db)
         dto = SanitizeStrings(dto);
 
         var entity = await db.Doors.FindAsync(id).ConfigureAwait(false);
+
         if (entity is null)
             return (null, null);
 
         var error = await ValidateAsync(dto, id).ConfigureAwait(false);
+
         if (error is not null)
             return (null, error);
 
-        entity.Label = dto.Label;
-        entity.Protocol = dto.Protocol.ToString();
-        entity.D0Pin = dto.D0Pin;
-        entity.D1Pin = dto.D1Pin;
-        entity.OsdpAddress = dto.OsdpAddress;
-        entity.OsdpSerialPort = dto.OsdpSerialPort;
-        entity.OsdpBaudRate = dto.OsdpBaudRate;
-        entity.DpsPin = dto.DpsPin;
-        entity.RexPin = dto.RexPin;
-        entity.ModbusSerialPort = dto.ModbusSerialPort;
-        entity.ModbusUnitId = dto.ModbusUnitId;
-        entity.DpsModbusChannel = dto.DpsModbusChannel;
-        entity.RexModbusChannel = dto.RexModbusChannel;
-        entity.ModbusTcpHost = dto.ModbusTcpHost;
-        entity.ModbusTcpPort = dto.ModbusTcpPort;
-        entity.DpsNormallyOpen = dto.DpsNormallyOpen;
-        entity.RexNormallyOpen = dto.RexNormallyOpen;
-        entity.OsdpNakManufacturerCommand = dto.OsdpNakManufacturerCommand;
+        // Shares its body with DoorConfigEntity.FromDto, so a field can't be wired into
+        // create and forgotten here — the failure mode that omission produces is invisible
+        // (create works, update silently no-ops).
+        entity.ApplyDto(dto);
 
         await db.SaveChangesAsync().ConfigureAwait(false);
+
         return (entity.ToDto(), null);
     }
 
     public async Task<bool> DeleteAsync(int id)
     {
         var entity = await db.Doors.FindAsync(id).ConfigureAwait(false);
+
         if (entity is null)
             return false;
 
         db.Doors.Remove(entity);
         await db.SaveChangesAsync().ConfigureAwait(false);
+
         return true;
     }
 
@@ -113,6 +109,7 @@ public class DoorConfigService(DoorSimDbContext db)
         OsdpSerialPort = Sanitize(dto.OsdpSerialPort),
         ModbusSerialPort = Sanitize(dto.ModbusSerialPort),
         ModbusTcpHost = Sanitize(dto.ModbusTcpHost),
+        OsdpIdVendorCode = Sanitize(dto.OsdpIdVendorCode)
     };
 
     private static string? Sanitize(string? value) =>
@@ -150,11 +147,14 @@ public class DoorConfigService(DoorSimDbContext db)
                 return $"OSDP baud rate {dto.OsdpBaudRate} is not supported. " +
                        $"Valid rates: {string.Join(", ", OsdpBaudRates.Supported)}.";
             }
+
+            var advancedError = ValidateAdvancedOsdp(dto);
+
+            if (advancedError is not null)
+                return advancedError;
         }
         else
-        {
             return $"Invalid protocol: {dto.Protocol}.";
-        }
 
         if (dto.DpsPin is < 0 or > 27)
             return "DPS GPIO pin must be in the valid BCM range (0 to 27).";
@@ -195,12 +195,11 @@ public class DoorConfigService(DoorSimDbContext db)
                     return "Modbus TCP port must be between 1 and 65,535.";
             }
             else if (string.IsNullOrWhiteSpace(dto.ModbusSerialPort))
-            {
                 return "Modbus RTU channels require a ModbusSerialPort.";
-            }
         }
 
         var selfPins = new[] { dto.D0Pin, dto.D1Pin, dto.DpsPin, dto.RexPin }.OfType<int>().ToList();
+
         if (selfPins.Count != selfPins.Distinct().Count())
             return "Duplicate GPIO pins specified for this door.";
 
@@ -268,6 +267,110 @@ public class DoorConfigService(DoorSimDbContext db)
         return null;
     }
 
+    /// <summary>
+    /// Validates the advanced OSDP settings. Only called for OSDP doors, so a door flipped to
+    /// Wiegand with stale advanced values still saves.
+    /// </summary>
+    /// <remarks>
+    /// Compliance levels are checked against the same <see cref="OsdpAdvancedDefaults" />
+    /// tables the edit dialog renders, so the dialog structurally cannot offer a value this
+    /// method rejects.
+    /// </remarks>
+    private static string? ValidateAdvancedOsdp(DoorConfiguration dto)
+    {
+        if (!OsdpAdvancedDefaults.IsLegalLevel(OsdpAdvancedDefaults.CardDataFormatLevels, dto.OsdpCapCardDataFormatCompliance))
+            return LevelError("Card data format", OsdpAdvancedDefaults.CardDataFormatLevels);
+
+        if (!OsdpAdvancedDefaults.IsLegalLevel(OsdpAdvancedDefaults.LedControlLevels, dto.OsdpCapLedControlCompliance))
+            return LevelError("Reader LED control", OsdpAdvancedDefaults.LedControlLevels);
+
+        if (!OsdpAdvancedDefaults.IsLegalLevel(OsdpAdvancedDefaults.CheckCharacterLevels, dto.OsdpCapCheckCharacterCompliance))
+            return LevelError("Check character support", OsdpAdvancedDefaults.CheckCharacterLevels);
+
+        if (!OsdpAdvancedDefaults.IsLegalLevel(OsdpAdvancedDefaults.ContactStatusLevels, dto.OsdpCapContactStatusCompliance))
+            return LevelError("Contact status monitoring", OsdpAdvancedDefaults.ContactStatusLevels);
+
+        if (!OsdpAdvancedDefaults.IsLegalLevel(OsdpAdvancedDefaults.OutputControlLevels, dto.OsdpCapOutputControlCompliance))
+            return LevelError("Output control", OsdpAdvancedDefaults.OutputControlLevels);
+
+        if (!OsdpAdvancedDefaults.IsLegalLevel(OsdpAdvancedDefaults.AudibleOutputLevels, dto.OsdpCapAudibleOutputCompliance))
+            return LevelError("Reader audible output", OsdpAdvancedDefaults.AudibleOutputLevels);
+
+        if (!OsdpAdvancedDefaults.IsLegalLevel(OsdpAdvancedDefaults.TextOutputLevels, dto.OsdpCapTextOutputCompliance))
+            return LevelError("Reader text output", OsdpAdvancedDefaults.TextOutputLevels);
+
+        if (!OsdpAdvancedDefaults.IsLegalLevel(OsdpAdvancedDefaults.OsdpVersionLevels, dto.OsdpCapOsdpVersion))
+            return LevelError("OSDP version", OsdpAdvancedDefaults.OsdpVersionLevels);
+
+        // A declared count of zero is never meaningful for these three.
+        if (dto.OsdpCapContactStatusInputs is 0)
+            return "Declared input count must be at least 1.";
+
+        if (dto.OsdpCapOutputControlCount is 0)
+            return "Declared output count must be at least 1.";
+
+        if (dto.OsdpCapLedsPerReader is 0)
+            return "Declared LEDs per reader must be at least 1.";
+
+        // Reject an orphaned count rather than silently dropping it — a value that looks
+        // saved but never reaches the wire is expensive to diagnose on a live bus.
+        if (dto is { OsdpCapContactStatusInputs: not null, OsdpCapContactStatusCompliance: null })
+            return "Declared input count requires a contact status monitoring compliance level.";
+
+        if (dto is { OsdpCapOutputControlCount: not null, OsdpCapOutputControlCompliance: null })
+            return "Declared output count requires an output control compliance level.";
+
+        if (dto is { OsdpCapTextOutputDisplays: not null, OsdpCapTextOutputCompliance: null })
+            return "Declared display count requires a reader text output compliance level.";
+
+        // The default-key bit is meaningless without the AES-128 support bit.
+        if (dto is { OsdpCapDeclareDefaultAesKey: true, OsdpCapDeclareAes128: false })
+            return "Declaring the default AES-128 key requires declaring AES-128 support.";
+
+        if (dto.OsdpCapReceiveBufferSize is not null && !IsLegalMessageSize(dto.OsdpCapReceiveBufferSize.Value))
+            return MessageSizeError("Receive buffer size");
+
+        if (dto.OsdpCapLargestCombinedMessageSize is not null && !IsLegalMessageSize(dto.OsdpCapLargestCombinedMessageSize.Value))
+            return MessageSizeError("Largest combined message size");
+
+        if (!OsdpAdvancedDefaults.TryParseVendorCode(dto.OsdpIdVendorCode, out _))
+        {
+            return $"Invalid OSDP vendor code '{dto.OsdpIdVendorCode}'. " +
+                   $"Expected three hex bytes, for example {OsdpAdvancedDefaults.VendorCodeText}.";
+        }
+
+        if (dto.OsdpConnectionTimeoutSeconds is < OsdpAdvancedDefaults.MinConnectionTimeoutSeconds or > OsdpAdvancedDefaults.MaxConnectionTimeoutSeconds)
+        {
+            return $"OSDP connection timeout must be between {OsdpAdvancedDefaults.MinConnectionTimeoutSeconds} " +
+                   $"and {OsdpAdvancedDefaults.MaxConnectionTimeoutSeconds} seconds.";
+        }
+
+        if (dto.OsdpReplyTimeoutMilliseconds is < OsdpAdvancedDefaults.MinReplyTimeoutMilliseconds or > OsdpAdvancedDefaults.MaxReplyTimeoutMilliseconds)
+        {
+            return $"OSDP reply timeout must be between {OsdpAdvancedDefaults.MinReplyTimeoutMilliseconds} " +
+                   $"and {OsdpAdvancedDefaults.MaxReplyTimeoutMilliseconds} ms.";
+        }
+
+        // A reply timeout at or above the connection timeout guarantees Device.IsConnected
+        // flickers false, which is the documented root cause of the "readers keep showing
+        // disconnected" bug. Compare the resolved values so setting only one still trips.
+        if (OsdpAdvancedDefaults.ResolveReplyTimeout(dto.OsdpReplyTimeoutMilliseconds)
+            >= OsdpAdvancedDefaults.ResolveConnectionTimeout(dto.OsdpConnectionTimeoutSeconds))
+            return "OSDP reply timeout must be shorter than the connection timeout.";
+
+        return null;
+
+        static bool IsLegalMessageSize(int size) =>
+            size is >= OsdpAdvancedDefaults.MinMessageSize and <= OsdpAdvancedDefaults.MaxMessageSize;
+
+        static string MessageSizeError(string name) =>
+            $"{name} must be between {OsdpAdvancedDefaults.MinMessageSize} " +
+            $"and {OsdpAdvancedDefaults.MaxMessageSize}.";
+
+        static string LevelError(string name, OsdpCapabilityLevel[] levels) =>
+            $"{name} compliance level must be one of: {string.Join(", ", levels.Select(l => l.Value))}.";
+    }
+
     private static string[] DiscoverSerialPorts()
     {
         var ports = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -284,9 +387,7 @@ public class DoorConfigService(DoorSimDbContext db)
                         || fileName.StartsWith("ttyAMA", StringComparison.OrdinalIgnoreCase)
                         || fileName.StartsWith("ttyUSB", StringComparison.OrdinalIgnoreCase)
                         || fileName.StartsWith("ttyS", StringComparison.OrdinalIgnoreCase))
-                    {
                         ports.Add(path);
-                    }
                 }
             }
             catch
@@ -297,7 +398,7 @@ public class DoorConfigService(DoorSimDbContext db)
 
         try
         {
-            foreach (var name in System.IO.Ports.SerialPort.GetPortNames())
+            foreach (var name in SerialPort.GetPortNames())
             {
                 if (!string.IsNullOrWhiteSpace(name))
                     ports.Add(name);

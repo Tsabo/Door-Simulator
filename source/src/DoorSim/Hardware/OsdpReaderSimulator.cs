@@ -1,7 +1,6 @@
 using System.Collections;
 using OSDP.Net;
 using OSDP.Net.Connections;
-using OSDP.Net.Model;
 using OSDP.Net.Model.ReplyData;
 
 namespace DoorSim.Hardware;
@@ -14,25 +13,19 @@ namespace DoorSim.Hardware;
 /// </summary>
 public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
 {
-    // Upstream OSDP.Net default is 8s, tuned for fast-polling ACUs. Mercury MP1502 panels
-    // were observed polling as slow as ~3s per reader with real-world jitter, which made
-    // Device.IsConnected flicker false against the 8s default despite a healthy link.
-    private static readonly TimeSpan _connectionTimeout = TimeSpan.FromSeconds(20);
-
-    // Upstream OSDP.Net default is 200ms, which assumes near-instantaneous delivery of the
-    // remaining bytes of an in-progress frame. On this Pi (one USB bus shared across many
-    // OSDP + Modbus serial devices), real inter-byte gaps within a single frame occasionally
-    // exceeded 200ms, throwing a TimeoutException that tore down and reopened the whole
-    // connection every cycle — confirmed via direct instrumentation, root cause of the
-    // "readers keep showing disconnected" issue, not the ConnectionTimeout above.
-    private static readonly TimeSpan _replyTimeout = TimeSpan.FromSeconds(2);
     private readonly int _baudRate;
+
+    // Per-door, resolved from the door's advanced OSDP settings. The rationale for the
+    // defaults — and why they differ from upstream OSDP.Net's 8s / 200ms — lives on the
+    // corresponding constants in OsdpAdvancedDefaults.
+    private readonly TimeSpan _connectionTimeout;
 
     private readonly DoorContactController _contacts;
 
     // null when no serial port is configured (PIN-only DPS/REX mode)
     private readonly Device? _device;
     private readonly ILogger<OsdpReaderSimulator> _logger;
+    private readonly TimeSpan _replyTimeout;
 
     private volatile bool _isDoorOpen;
     private volatile bool _isRexActive;
@@ -51,24 +44,27 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
     {
         Config = config;
         _baudRate = OsdpBaudRates.Resolve(config.OsdpBaudRate);
+        _connectionTimeout = OsdpAdvancedDefaults.ResolveConnectionTimeout(config.OsdpConnectionTimeoutSeconds);
+        _replyTimeout = OsdpAdvancedDefaults.ResolveReplyTimeout(config.OsdpReplyTimeoutMilliseconds);
         _logger = loggerFactory.CreateLogger<OsdpReaderSimulator>();
         _contacts = new DoorContactController(config, gpio, modbus, modbusTcp, _logger);
 
         if (config.OsdpSerialPort is not null)
         {
             var deviceConfig = new DeviceConfiguration(
-                new ClientIdentification([0x00, 0x00, 0x01], (uint)config.Id))
+                // Built from the same door settings as the osdp_ID reply, so the cUID's
+                // vendor code and serial number cannot drift out of step with it.
+                OsdpCapabilityMapper.BuildClientIdentification(config))
             {
                 Address = config.OsdpAddress ?? 0,
                 RequireSecurity = false,
-                ConnectionTimeout = _connectionTimeout,
+                ConnectionTimeout = _connectionTimeout
             };
 
-            _device = new LoggingDevice(deviceConfig, loggerFactory, config.Id, config.Label,
+            _device = new LoggingDevice(deviceConfig, loggerFactory, config,
                 _baudRate,
                 () => _isDoorOpen,
-                () => _isRexActive,
-                !config.OsdpNakManufacturerCommand);
+                () => _isRexActive);
 
             _ = StartListeningAsync(config.OsdpSerialPort, loggerFactory);
         }
@@ -271,7 +267,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         {
             _listener = new SerialPortConnectionListener(serialPort, _baudRate, loggerFactory)
             {
-                ReplyTimeout = _replyTimeout,
+                ReplyTimeout = _replyTimeout
             };
 
             _logger.LogInformation(
@@ -295,7 +291,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
             WiegandFormat.Wiegand34 => (WiegandTransmitter.BuildWiegand34(facilityCode, cardNumber), 34),
             WiegandFormat.Wiegand37 => (WiegandTransmitter.BuildWiegand37(cardNumber), 37),
             WiegandFormat.HidCorporate1000 => (WiegandTransmitter.BuildHidCorporate1000(facilityCode, cardNumber), 35),
-            var _ => throw new ArgumentOutOfRangeException(nameof(format), format, null),
+            _ => throw new ArgumentOutOfRangeException(nameof(format), format, null)
         };
 
     /// <summary>
