@@ -202,10 +202,13 @@ internal sealed class LoggingDevice : Device
     protected override PayloadData HandleManufacturerCommand(ManufacturerSpecific commandPayload)
     {
         _logger.LogInformation(
-            "Door {Id} ({Label}): CP sent osdp_MFG vendor={Vendor} data={Data}",
+            "Door {Id} ({Label}): CP sent osdp_MFG vendor={Vendor} data={Data} [Response={Response}]",
             _doorId, _label,
             BitConverter.ToString(commandPayload.VendorCode),
-            BitConverter.ToString(commandPayload.Data));
+            BitConverter.ToString(commandPayload.Data),
+            _nakManufacturerCommand
+                ? "NAK"
+                : "ACK");
 
         return _nakManufacturerCommand
             ? new Nak(ErrorCode.UnknownCommandCode)

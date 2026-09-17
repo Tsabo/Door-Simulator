@@ -16,4 +16,7 @@ public enum WiegandFormat
 
     [Description("HID Corporate 1000 — 12-bit facility code, 20-bit card number, 35 bits total, no parity.")]
     HidCorporate1000,
+
+    [Description("User-defined mask-based format — see CustomCardFormat.")]
+    Custom
 }

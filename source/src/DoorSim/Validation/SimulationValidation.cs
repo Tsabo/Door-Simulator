@@ -33,7 +33,7 @@ public static class SimulationValidation
         if (request.ReaderId <= 0)
             return "ReaderId must be greater than zero.";
 
-        return CardValidation.ValidateCredential(request.CardNumber, request.FacilityCode, request.Format);
+        return CardValidation.ValidateCredential(request.CardNumber, request.FacilityCode, request.Format, request.CustomFormatId);
     }
 
     /// <summary>
@@ -48,7 +48,7 @@ public static class SimulationValidation
             return $"Invalid event type: {request.EventType}.";
 
         if (request.EventType != DoorEventType.EgressCycle)
-            return CardValidation.ValidateCredential(request.CardNumber, request.FacilityCode, request.Format);
+            return CardValidation.ValidateCredential(request.CardNumber, request.FacilityCode, request.Format, request.CustomFormatId);
 
         return null;
     }

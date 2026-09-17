@@ -11,8 +11,13 @@ public class DoorSimDbContext(DbContextOptions<DoorSimDbContext> options) : DbCo
         ticks => new DateTimeOffset(ticks, TimeSpan.Zero));
 
     public DbSet<CardEntity> Cards => Set<CardEntity>();
+
+    public DbSet<CardFormatEntity> CardFormats => Set<CardFormatEntity>();
+
     public DbSet<DoorConfigEntity> Doors => Set<DoorConfigEntity>();
+
     public DbSet<SimulationSettingsEntity> SimulationSettings => Set<SimulationSettingsEntity>();
+
     public DbSet<SimulationEventEntity> SimulationEvents => Set<SimulationEventEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -22,6 +27,16 @@ public class DoorSimDbContext(DbContextOptions<DoorSimDbContext> options) : DbCo
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Label).IsRequired().HasMaxLength(100);
             entity.Property(e => e.Format).HasConversion<string>(); // stored as string in DB
+        });
+
+        modelBuilder.Entity<CardFormatEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.CardMask).IsRequired().HasMaxLength(65);
+            entity.Property(e => e.Parity1Mask).HasMaxLength(65);
+            entity.Property(e => e.Parity2Mask).HasMaxLength(65);
+            entity.Property(e => e.Parity3Mask).HasMaxLength(65);
         });
 
         modelBuilder.Entity<DoorConfigEntity>(entity =>

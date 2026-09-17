@@ -101,6 +101,17 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
     }
 
     /// <inheritdoc />
+    public Task SendCardAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format)
+    {
+        EnsureWiegand();
+        _logger.LogInformation(
+            "Door {Id}: raw send custom format '{FormatName}' FC={FC} Card={Card}",
+            Config.Id, format.Name, facilityCode, cardNumber);
+
+        return Task.Run(() => _transmitter!.Send(cardNumber, facilityCode, format));
+    }
+
+    /// <inheritdoc />
     public Task SendBitsAsync(string bits)
     {
         EnsureWiegand();
@@ -129,6 +140,18 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
 
     /// <inheritdoc />
     public async Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, WiegandFormat format, int cardToDoorDelayMs, int doorOpenMs)
+    {
+        await SendCardAsync(cardNumber, facilityCode, format).ConfigureAwait(false);
+        if (cardToDoorDelayMs > 0)
+            await Task.Delay(cardToDoorDelayMs).ConfigureAwait(false);
+
+        await OpenDoorAsync().ConfigureAwait(false);
+        await Task.Delay(doorOpenMs).ConfigureAwait(false);
+        await CloseDoorAsync().ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format, int cardToDoorDelayMs, int doorOpenMs)
     {
         await SendCardAsync(cardNumber, facilityCode, format).ConfigureAwait(false);
         if (cardToDoorDelayMs > 0)

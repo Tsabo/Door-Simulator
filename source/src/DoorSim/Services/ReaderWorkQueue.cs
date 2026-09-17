@@ -37,7 +37,7 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
         _channel = Channel.CreateUnbounded<SimulationWorkItem>(new UnboundedChannelOptions
         {
             SingleReader = true,
-            SingleWriter = false,
+            SingleWriter = false
         });
 
         _processingTask = Task.Run(ProcessQueueAsync);
@@ -247,104 +247,102 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
         try
         {
             while (await reader.WaitToReadAsync(_shutdownCts.Token).ConfigureAwait(false))
+            while (reader.TryRead(out var item))
             {
-                while (reader.TryRead(out var item))
+                // Check if item was cancelled before it even began running
+                lock (_lock)
                 {
-                    // Check if item was cancelled before it even began running
-                    lock (_lock)
+                    if (!_pendingItems.Remove(item))
                     {
-                        if (!_pendingItems.Remove(item))
-                        {
-                            // Already removed via TryCancel/ClearPending
-                            continue;
-                        }
-
-                        _runningItem = item;
-                    }
-
-                    _statusCallback(_readerId, SimulationStatus.Running);
-
-                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                        _shutdownCts.Token, item.Cts.Token);
-
-                    Exception? workException = null;
-                    var startedAt = DateTimeOffset.UtcNow;
-                    var startTicks = Stopwatch.GetTimestamp();
-
-                    try
-                    {
-                        await item.Work(linkedCts.Token).ConfigureAwait(false);
-                        _statusCallback(_readerId, SimulationStatus.Success);
-                    }
-                    catch (OperationCanceledException) when (item.Cts.IsCancellationRequested || _shutdownCts.IsCancellationRequested)
-                    {
-                        _logger.LogInformation("Reader {R}: item {Desc} was cancelled", _readerId, item.Description);
-                        _statusCallback(_readerId, SimulationStatus.Idle);
-                        workException = new OperationCanceledException(item.Cts.Token);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Reader {R}: item {Desc} failed", _readerId, item.Description);
-                        _statusCallback(_readerId, SimulationStatus.Error);
-                        workException = ex;
-                    }
-                    finally
-                    {
-                        lock (_lock)
-                        {
-                            _runningItem = null;
-                        }
-
-                        RecordCompletion(item, startedAt, Stopwatch.GetElapsedTime(startTicks), workException);
-                    }
-
-                    if (workException is OperationCanceledException)
-                        item.Tcs.TrySetCanceled();
-                    else if (workException is not null)
-                        item.Tcs.TrySetException(workException);
-                    else
-                        item.Tcs.TrySetResult(true);
-
-                    // If more items are waiting, apply inter-item queue delay if configured, then loop.
-                    // Otherwise, give a short moment to display Success/Error before returning to Idle.
-                    bool hasMore;
-                    lock (_lock)
-                    {
-                        hasMore = _pendingItems.Count > 0;
-                    }
-
-                    if (hasMore)
-                    {
-                        var delayMs = _getQueueItemDelayMs?.Invoke() ?? 0;
-                        if (delayMs > 0)
-                        {
-                            try
-                            {
-                                await Task.Delay(delayMs, _shutdownCts.Token).ConfigureAwait(false);
-                            }
-                            catch (OperationCanceledException)
-                            {
-                                // Shutdown requested
-                            }
-                        }
-
+                        // Already removed via TryCancel/ClearPending
                         continue;
                     }
 
-                    try
-                    {
-                        await Task.Delay(1500, _shutdownCts.Token).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        // Shutdown requested
-                    }
+                    _runningItem = item;
+                }
 
+                _statusCallback(_readerId, SimulationStatus.Running);
+
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    _shutdownCts.Token, item.Cts.Token);
+
+                Exception? workException = null;
+                var startedAt = DateTimeOffset.UtcNow;
+                var startTicks = Stopwatch.GetTimestamp();
+
+                try
+                {
+                    await item.Work(linkedCts.Token).ConfigureAwait(false);
+                    _statusCallback(_readerId, SimulationStatus.Success);
+                }
+                catch (OperationCanceledException) when (item.Cts.IsCancellationRequested || _shutdownCts.IsCancellationRequested)
+                {
+                    _logger.LogInformation("Reader {R}: item {Desc} was cancelled", _readerId, item.Description);
+                    _statusCallback(_readerId, SimulationStatus.Idle);
+                    workException = new OperationCanceledException(item.Cts.Token);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Reader {R}: item {Desc} failed", _readerId, item.Description);
+                    _statusCallback(_readerId, SimulationStatus.Error);
+                    workException = ex;
+                }
+                finally
+                {
                     lock (_lock)
                     {
-                        if (_pendingItems.Count == 0 && _runningItem is null)
-                            _statusCallback(_readerId, SimulationStatus.Idle);
+                        _runningItem = null;
                     }
+
+                    RecordCompletion(item, startedAt, Stopwatch.GetElapsedTime(startTicks), workException);
+                }
+
+                if (workException is OperationCanceledException)
+                    item.Tcs.TrySetCanceled();
+                else if (workException is not null)
+                    item.Tcs.TrySetException(workException);
+                else
+                    item.Tcs.TrySetResult(true);
+
+                // If more items are waiting, apply inter-item queue delay if configured, then loop.
+                // Otherwise, give a short moment to display Success/Error before returning to Idle.
+                bool hasMore;
+                lock (_lock)
+                {
+                    hasMore = _pendingItems.Count > 0;
+                }
+
+                if (hasMore)
+                {
+                    var delayMs = _getQueueItemDelayMs?.Invoke() ?? 0;
+                    if (delayMs > 0)
+                    {
+                        try
+                        {
+                            await Task.Delay(delayMs, _shutdownCts.Token).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // Shutdown requested
+                        }
+                    }
+
+                    continue;
+                }
+
+                try
+                {
+                    await Task.Delay(1500, _shutdownCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Shutdown requested
+                }
+
+                lock (_lock)
+                {
+                    if (_pendingItems.Count == 0 && _runningItem is null)
+                        _statusCallback(_readerId, SimulationStatus.Idle);
                 }
             }
         }
@@ -388,7 +386,7 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
             {
                 null => SimulationEventOutcome.Success,
                 OperationCanceledException => SimulationEventOutcome.Cancelled,
-                var _ => SimulationEventOutcome.Error,
+                _ => SimulationEventOutcome.Error
             };
 
             _onCompleted(new SimulationEventRecord(
@@ -412,7 +410,8 @@ public sealed class ReaderWorkQueue : IAsyncDisposable
                 item.QueueDepthAtEnqueue,
                 outcome == SimulationEventOutcome.Error
                     ? workException?.Message
-                    : null));
+                    : null,
+                item.Telemetry.CustomFormatId));
         }
         catch (Exception ex)
         {
@@ -432,14 +431,23 @@ internal sealed class SimulationWorkItem(
     SimulationEventContext? telemetry = null)
 {
     public Guid Id { get; } = Guid.NewGuid();
+
     public int ReaderId { get; } = readerId;
+
     public string Description { get; } = description;
+
     public DoorEventType? EventType { get; } = eventType;
+
     public SimulationEventContext? Telemetry { get; } = telemetry;
+
     public int QueueDepthAtEnqueue { get; set; }
+
     public DateTimeOffset EnqueuedAt { get; } = DateTimeOffset.UtcNow;
+
     public Func<CancellationToken, Task> Work { get; } = work;
+
     public TaskCompletionSource<bool> Tcs { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public CancellationTokenSource Cts { get; } = new();
 
     public void Cancel()

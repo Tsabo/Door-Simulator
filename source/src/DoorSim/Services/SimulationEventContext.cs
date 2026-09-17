@@ -10,4 +10,5 @@ public record SimulationEventContext(
     uint? CardNumber = null,
     ushort? FacilityCode = null,
     WiegandFormat? Format = null,
-    string? RawBits = null);
+    string? RawBits = null,
+    int? CustomFormatId = null);

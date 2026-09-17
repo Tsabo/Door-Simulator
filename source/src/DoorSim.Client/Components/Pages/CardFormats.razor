@@ -1,0 +1,196 @@
+@page "/card-formats"
+@inject CardFormatApiClient Formats
+
+<PageTitle>Card Formats — DoorSim</PageTitle>
+
+<div class="d-flex align-end justify-space-between flex-wrap mb-6" style="gap:24px">
+    <div>
+        <MudText Typo="Typo.h4">Card formats</MudText>
+        <MudText Typo="Typo.body2" Class="muted">
+            Paint the bit map or edit the mask strings directly. Both stay in sync, and every
+            change re-runs the encoder against the test bench below.
+        </MudText>
+    </div>
+    <div class="d-flex gap-2">
+        <MudButton Variant="Variant.Text" OnClick="NewFormat">New format</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                   OnClick="Revert" Disabled="@(_selectedId < 0)">
+            Revert
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="SaveAsync" Disabled="@_saving">
+            @(_saving ? "Saving…" : "Save format")
+        </MudButton>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <MudContainer Class="d-flex justify-center mt-16">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    </MudContainer>
+}
+else
+{
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_error</MudAlert>
+    }
+
+    @if (_saved)
+    {
+        <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">Format saved.</MudAlert>
+    }
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="3">
+            <MudPaper Class="pa-4 mb-3" Elevation="1">
+                <MudText Typo="Typo.overline">Saved formats</MudText>
+
+                @if (_library.Length == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="muted mt-2">
+                        No formats yet.
+                    </MudText>
+                }
+                else
+                {
+                    @foreach (var format in _library)
+                    {
+                        var entry = format;
+
+                        <div class="d-flex align-center" style="gap:4px">
+                            <MudButton Variant="Variant.Text"
+                                       Color="@(entry.Id == _selectedId ? Color.Primary : Color.Default)"
+                                       FullWidth="true"
+                                       Class="justify-start mt-2"
+                                       OnClick="() => Load(entry)">
+                                <div class="d-flex flex-column align-start" style="text-transform:none">
+                                    <span>@entry.Name</span>
+                                    <span class="mono" style="font-size:.7rem;opacity:.7">
+                                        @($"{entry.CardMask.Length} bits")
+                                    </span>
+                                </div>
+                            </MudButton>
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           Class="mt-2"
+                                           OnClick="() => DeleteAsync(entry.Id)" />
+                        </div>
+                    }
+                }
+            </MudPaper>
+
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.overline">Built-in formats</MudText>
+                <MudText Typo="Typo.caption" Class="muted d-block mt-1">
+                    Loads as a draft — nothing is saved until you save it.
+                </MudText>
+
+                @foreach (var template in CardFormatCatalog.All)
+                {
+                    var entry = template;
+
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Default"
+                               FullWidth="true"
+                               Class="justify-start mt-2"
+                               title="@entry.Description"
+                               OnClick="() => LoadTemplate(entry)">
+                        <div class="d-flex flex-column align-start"
+                             style="text-transform:none;text-align:left">
+                            <span>@entry.Name</span>
+                            <span class="d-flex align-center" style="gap:6px">
+                                <span class="mono" style="font-size:.7rem;opacity:.7">
+                                    @($"{entry.BitCount} bits")
+                                </span>
+                                @if (entry.Provenance == FormatProvenance.PublishedSpec)
+                                {
+                                    @* Unverified provenance belongs at the point of choice, not in a comment. *@
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                                             Color="Color.Warning" Class="ma-0"
+                                             title="Field split per published HID tables, not cross-checked in this repo. Confirm against your vendor spec.">
+                                        unverified
+                                    </MudChip>
+                                }
+                            </span>
+                        </div>
+                    </MudButton>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="9">
+            <MudPaper Class="pa-6 mb-6" Elevation="1">
+                <div class="d-flex align-end flex-wrap" style="gap:24px">
+                    <MudTextField @bind-Value="_name"
+                                  Label="Format name"
+                                  Placeholder="e.g. Wiegand 26-bit (H10301)"
+                                  Immediate="true"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Style="min-width:260px" />
+
+                    <MudNumericField T="int"
+                                     Value="_bits"
+                                     ValueChanged="OnBitsChanged"
+                                     Label="Bit count"
+                                     Min="4"
+                                     Max="65"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Style="width:110px" />
+
+                    <div>
+                        <MudText Typo="Typo.overline" Class="muted">Card bits</MudText>
+                        <MudText Typo="Typo.body2" Class="mono">@_analysis.CardBits</MudText>
+                    </div>
+                    <div>
+                        <MudText Typo="Typo.overline" Class="muted">Facility bits</MudText>
+                        <MudText Typo="Typo.body2" Class="mono">@_analysis.FacilityBits</MudText>
+                    </div>
+                    <div>
+                        <MudText Typo="Typo.overline" Class="muted">Parity rules</MudText>
+                        <MudText Typo="Typo.body2" Class="mono">@_analysis.ParityRuleCount</MudText>
+                    </div>
+                </div>
+            </MudPaper>
+
+            <MudPaper Class="pa-6 mb-6" Elevation="1">
+                <BitMap Masks="_masks"
+                        MasksChanged="OnMasksChanged"
+                        Bits="_bits"
+                        Tool="_tool"
+                        ToolChanged="@(token => _tool = token)" />
+            </MudPaper>
+
+            <MudPaper Class="pa-6 mb-6" Elevation="1">
+                <FormatIssueList Analysis="_analysis" />
+            </MudPaper>
+
+            <MudGrid Spacing="3">
+                <MudItem xs="12" lg="6">
+                    <MudPaper Class="pa-6" Elevation="1" Style="height:100%">
+                        <EncodeBench CardNumber="@_cardIn"
+                                     CardNumberChanged="OnCardInChanged"
+                                     FacilityCode="@_facilityIn"
+                                     FacilityCodeChanged="OnFacilityInChanged"
+                                     Bits="_bits"
+                                     Hex="@_hex"
+                                     Frame="_frame"
+                                     ParityBits="_analysis.ParityBitPositions"
+                                     RoundTripOk="_roundTripOk" />
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" lg="6">
+                    <MudPaper Class="pa-6" Elevation="1" Style="height:100%">
+                        <DecodeBench Hex="@_hexIn"
+                                     HexChanged="OnHexInChanged"
+                                     Result="_decoded" />
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudItem>
+    </MudGrid>
+}

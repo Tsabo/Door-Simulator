@@ -26,4 +26,5 @@ public record SimulationEventRecord(
     int QueueWaitMs,
     int DurationMs,
     int QueueDepthAtEnqueue,
-    string? Error);
+    string? Error,
+    int? CustomFormatId = null);

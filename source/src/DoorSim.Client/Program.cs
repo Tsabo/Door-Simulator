@@ -12,6 +12,7 @@ builder.Services.AddScoped(sp =>
 
 builder.Services.AddScoped<CardApiClient>();
 builder.Services.AddScoped<SimulationApiClient>();
+builder.Services.AddScoped<CardFormatApiClient>();
 builder.Services.AddScoped<DoorApiClient>();
 builder.Services.AddScoped<SettingsApiClient>();
 builder.Services.AddScoped<MetricsApiClient>();

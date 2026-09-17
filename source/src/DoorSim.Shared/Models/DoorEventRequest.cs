@@ -10,7 +10,8 @@ public record RawDoorEventRequest(
     DoorEventType EventType,
     uint CardNumber,
     ushort FacilityCode,
-    WiegandFormat Format);
+    WiegandFormat Format,
+    int? CustomFormatId = null);
 
 [Description("What kind of event to simulate.")]
 public enum DoorEventType
@@ -22,5 +23,5 @@ public enum DoorEventType
     AccessCycle,
 
     [Description("REX trip followed by a door open + door close cycle, then REX reset.")]
-    EgressCycle,
+    EgressCycle
 }

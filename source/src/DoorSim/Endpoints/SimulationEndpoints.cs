@@ -9,9 +9,10 @@ public static class SimulationEndpoints
         var group = app.MapGroup("/api/simulate").WithTags("Simulation");
 
         // Library-backed events (card looked up by ID)
-        group.MapPost("/event", async (DoorEventRequest request, SimulationOrchestrator orchestrator, IReaderBank bank, CardLibraryService cardService) =>
+        group.MapPost("/event", async (DoorEventRequest request, SimulationOrchestrator orchestrator, IReaderBank bank, CardLibraryService cardService, CardFormatService formatService) =>
             {
                 var validationError = SimulationValidation.Validate(request);
+
                 if (validationError is not null)
                     return Results.BadRequest(validationError);
 
@@ -21,8 +22,22 @@ public static class SimulationEndpoints
                 if (request.EventType != DoorEventType.EgressCycle)
                 {
                     var card = await cardService.GetAsync(request.CardEntryId!.Value);
+
                     if (card is null)
                         return Results.NotFound($"Card {request.CardEntryId.Value} not found in library.");
+
+                    if (card.Format == WiegandFormat.Custom)
+                    {
+                        var format = await formatService.GetAsync(card.CustomFormatId!.Value);
+
+                        if (format is null)
+                            return Results.NotFound($"Custom format {card.CustomFormatId} not found.");
+
+                        var boundsError = CardFormatValidation.ValidateCredential(card.CardNumber, card.FacilityCode, format);
+
+                        if (boundsError is not null)
+                            return Results.BadRequest(boundsError);
+                    }
                 }
 
                 await orchestrator.RunEventAsync(request);
@@ -42,14 +57,28 @@ public static class SimulationEndpoints
             .Produces<string>(StatusCodes.Status404NotFound);
 
         // Raw value send (no library entry needed)
-        group.MapPost("/send-card", async (RawCardRequest request, SimulationOrchestrator orchestrator, IReaderBank bank) =>
+        group.MapPost("/send-card", async (RawCardRequest request, SimulationOrchestrator orchestrator, IReaderBank bank, CardFormatService formatService) =>
             {
                 var validationError = SimulationValidation.Validate(request);
+
                 if (validationError is not null)
                     return Results.BadRequest(validationError);
 
                 if (!bank.ContainsReader(request.ReaderId))
                     return Results.NotFound($"Reader {request.ReaderId} not found in the active bank.");
+
+                if (request.Format == WiegandFormat.Custom)
+                {
+                    var format = await formatService.GetAsync(request.CustomFormatId!.Value);
+
+                    if (format is null)
+                        return Results.NotFound($"Custom format {request.CustomFormatId} not found.");
+
+                    var boundsError = CardFormatValidation.ValidateCredential(request.CardNumber, request.FacilityCode, format);
+
+                    if (boundsError is not null)
+                        return Results.BadRequest(boundsError);
+                }
 
                 await orchestrator.SendCardAsync(request);
 
@@ -70,6 +99,7 @@ public static class SimulationEndpoints
         group.MapPost("/send-bits", async (RawBitsRequest request, SimulationOrchestrator orchestrator, IReaderBank bank) =>
             {
                 var validationError = SimulationValidation.Validate(request);
+
                 if (validationError is not null)
                     return Results.BadRequest(validationError);
 
@@ -90,14 +120,28 @@ public static class SimulationEndpoints
             .Produces<string>(StatusCodes.Status400BadRequest)
             .Produces<string>(StatusCodes.Status404NotFound);
 
-        group.MapPost("/raw-event", async (RawDoorEventRequest request, SimulationOrchestrator orchestrator, IReaderBank bank) =>
+        group.MapPost("/raw-event", async (RawDoorEventRequest request, SimulationOrchestrator orchestrator, IReaderBank bank, CardFormatService formatService) =>
             {
                 var validationError = SimulationValidation.Validate(request);
+
                 if (validationError is not null)
                     return Results.BadRequest(validationError);
 
                 if (!bank.ContainsReader(request.ReaderId))
                     return Results.NotFound($"Reader {request.ReaderId} not found in the active bank.");
+
+                if (request.EventType != DoorEventType.EgressCycle && request.Format == WiegandFormat.Custom)
+                {
+                    var format = await formatService.GetAsync(request.CustomFormatId!.Value);
+
+                    if (format is null)
+                        return Results.NotFound($"Custom format {request.CustomFormatId} not found.");
+
+                    var boundsError = CardFormatValidation.ValidateCredential(request.CardNumber, request.FacilityCode, format);
+
+                    if (boundsError is not null)
+                        return Results.BadRequest(boundsError);
+                }
 
                 await orchestrator.RunRawEventAsync(request);
 
@@ -121,6 +165,7 @@ public static class SimulationEndpoints
                     return Results.NotFound($"Reader {readerId} not found in the active bank.");
 
                 await orchestrator.OpenDoorAsync(readerId);
+
                 return Results.Ok();
             })
             .WithName("OpenDoor")
@@ -136,6 +181,7 @@ public static class SimulationEndpoints
                     return Results.NotFound($"Reader {readerId} not found in the active bank.");
 
                 await orchestrator.CloseDoorAsync(readerId);
+
                 return Results.Ok();
             })
             .WithName("CloseDoor")
@@ -150,6 +196,7 @@ public static class SimulationEndpoints
                     return Results.NotFound($"Reader {readerId} not found in the active bank.");
 
                 await orchestrator.QuickRexAsync(readerId);
+
                 return Results.Ok();
             })
             .WithName("QuickRex")
@@ -218,6 +265,7 @@ public static class SimulationEndpoints
                     return Results.NotFound($"Reader {readerId} not found in the active bank.");
 
                 orchestrator.ClearQueue(readerId);
+
                 return Results.NoContent();
             })
             .WithName("ClearReaderQueue")
@@ -231,7 +279,10 @@ public static class SimulationEndpoints
                     return Results.NotFound($"Reader {readerId} not found in the active bank.");
 
                 var cancelled = orchestrator.CancelQueueItem(readerId, itemId);
-                return cancelled ? Results.NoContent() : Results.NotFound($"Queue item {itemId} not found for reader {readerId}.");
+
+                return cancelled
+                    ? Results.NoContent()
+                    : Results.NotFound($"Queue item {itemId} not found for reader {readerId}.");
             })
             .WithName("CancelReaderQueueItem")
             .WithSummary("Cancel a specific simulation item in a reader's queue.")

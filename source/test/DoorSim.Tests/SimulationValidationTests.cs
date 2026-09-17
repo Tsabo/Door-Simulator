@@ -70,6 +70,25 @@ public class SimulationValidationTests
     }
 
     [Test]
+    public async Task RawCardRequest_Custom_MissingCustomFormatId_ReturnsError()
+    {
+        var req = new RawCardRequest(1, 1000, 10, WiegandFormat.Custom);
+        var error = SimulationValidation.Validate(req);
+
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error).Contains("CustomFormatId is required");
+    }
+
+    [Test]
+    public async Task RawCardRequest_Custom_WithCustomFormatId_ReturnsNull()
+    {
+        var req = new RawCardRequest(1, 1000, 10, WiegandFormat.Custom, 5);
+        var error = SimulationValidation.Validate(req);
+
+        await Assert.That(error).IsNull();
+    }
+
+    [Test]
     [Arguments(0)]
     [Arguments(-1)]
     public async Task RawDoorEventRequest_InvalidReaderId_ReturnsError(int readerId)
@@ -85,6 +104,25 @@ public class SimulationValidationTests
     public async Task RawDoorEventRequest_EgressCycle_IgnoresCardBounds()
     {
         var req = new RawDoorEventRequest(1, DoorEventType.EgressCycle, 999_999, 999, WiegandFormat.Wiegand26);
+        var error = SimulationValidation.Validate(req);
+
+        await Assert.That(error).IsNull();
+    }
+
+    [Test]
+    public async Task RawDoorEventRequest_Custom_MissingCustomFormatId_ReturnsError()
+    {
+        var req = new RawDoorEventRequest(1, DoorEventType.CardReadOnly, 1000, 10, WiegandFormat.Custom);
+        var error = SimulationValidation.Validate(req);
+
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error).Contains("CustomFormatId is required");
+    }
+
+    [Test]
+    public async Task RawDoorEventRequest_Custom_WithCustomFormatId_ReturnsNull()
+    {
+        var req = new RawDoorEventRequest(1, DoorEventType.CardReadOnly, 1000, 10, WiegandFormat.Custom, 5);
         var error = SimulationValidation.Validate(req);
 
         await Assert.That(error).IsNull();

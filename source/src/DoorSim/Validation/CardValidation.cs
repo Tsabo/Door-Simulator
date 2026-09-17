@@ -18,16 +18,26 @@ public static class CardValidation
         if (card.Label.Length > MaxLabelLength)
             return $"Card label cannot exceed {MaxLabelLength} characters.";
 
-        return ValidateCredential(card.CardNumber, card.FacilityCode, card.Format);
+        return ValidateCredential(card.CardNumber, card.FacilityCode, card.Format, card.CustomFormatId);
     }
 
     /// <summary>
     /// Validates raw credential fields against the bit-width limitations of the specified <see cref="WiegandFormat" />.
+    /// For <see cref="WiegandFormat.Custom" />, only checks that <paramref name="customFormatId" /> is present —
+    /// the actual bit-width check happens once the format definition has been loaded from the database
+    /// (see <see cref="CardFormatValidation.ValidateCredential" />).
     /// </summary>
-    public static string? ValidateCredential(uint cardNumber, ushort facilityCode, WiegandFormat format)
+    public static string? ValidateCredential(uint cardNumber, ushort facilityCode, WiegandFormat format, int? customFormatId = null)
     {
         if (!Enum.IsDefined(format))
             return $"Invalid Wiegand format: {format}.";
+
+        if (format == WiegandFormat.Custom)
+        {
+            return customFormatId is null or <= 0
+                ? "CustomFormatId is required and must be greater than zero when Format is Custom."
+                : null;
+        }
 
         return format switch
         {
@@ -35,7 +45,7 @@ public static class CardValidation
             WiegandFormat.Wiegand34 => ValidateWiegand34(facilityCode, cardNumber),
             WiegandFormat.Wiegand37 => ValidateWiegand37(cardNumber),
             WiegandFormat.HidCorporate1000 => ValidateHidCorporate1000(facilityCode, cardNumber),
-            var _ => $"Unsupported Wiegand format: {format}.",
+            _ => $"Unsupported Wiegand format: {format}."
         };
     }
 
@@ -64,6 +74,7 @@ public static class CardValidation
     private static string? ValidateWiegand37(uint cardNumber)
     {
         _ = cardNumber;
+
         // 35 data bits total; uint maxValue (4,294,967,295) is 32 bits, safely within 35 bits.
         return null;
     }

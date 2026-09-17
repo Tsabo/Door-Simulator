@@ -28,10 +28,17 @@ internal sealed class WiegandTransmitter(GpioController? gpio, int d0Pin, int d1
             WiegandFormat.Wiegand34 => (BuildWiegand34(facilityCode, cardNumber), 34),
             WiegandFormat.Wiegand37 => (BuildWiegand37(cardNumber), 37),
             WiegandFormat.HidCorporate1000 => (BuildHidCorporate1000(facilityCode, cardNumber), 35),
-            var _ => throw new ArgumentOutOfRangeException(nameof(format)),
+            _ => throw new ArgumentOutOfRangeException(nameof(format))
         };
 
         TransmitBits(frame, bitCount);
+    }
+
+    /// <summary>Transmit a credential using a user-defined <see cref="CustomCardFormat" />.</summary>
+    public void Send(uint cardNumber, ushort facilityCode, CustomCardFormat format)
+    {
+        var encoder = new CardFormatEncoder(format.CardMask, format.Parity1Mask, format.Parity2Mask, format.Parity3Mask);
+        TransmitBits(encoder.Encode(cardNumber, facilityCode), format.CardMask.Length);
     }
 
     /// <summary>Transmit an arbitrary bit-stream (e.g. "10000000000010100011100100000000").</summary>
@@ -138,13 +145,14 @@ internal sealed class WiegandTransmitter(GpioController? gpio, int d0Pin, int d1
     }
 
     /// <summary>
-    /// HID Corporate 1000 (H10302): [0(1)][0(1)][FC(12)][CN(20)][0(1)] = 35 bits.
-    /// No parity. Positions are 0-indexed from MSB:
-    ///   pos 0  → bit 34 (LSB-0): leading 0
-    ///   pos 1  → bit 33 (LSB-0): 0 (unused)
-    ///   pos 2–13  → bits 32–21 (LSB-0): FC (12 bits) → fc &lt;&lt; 21
-    ///   pos 14–33 → bits 20–1  (LSB-0): CN (20 bits) → cn &lt;&lt; 1
-    ///   pos 34 → bit 0  (LSB-0): trailing 0
+    /// HID Corporate 1000, 35-bit: [0(1)][0(1)][FC(12)][CN(20)][0(1)] = 35 bits.
+    /// No parity — the three pinned-zero bits sit where real Corporate 1000 carries its parity
+    /// bits, so this layout is not interoperable with it. Positions are 0-indexed from MSB:
+    /// pos 0  → bit 34 (LSB-0): leading 0
+    /// pos 1  → bit 33 (LSB-0): 0 (unused)
+    /// pos 2–13  → bits 32–21 (LSB-0): FC (12 bits) → fc &lt;&lt; 21
+    /// pos 14–33 → bits 20–1  (LSB-0): CN (20 bits) → cn &lt;&lt; 1
+    /// pos 34 → bit 0  (LSB-0): trailing 0
     /// FC is 12-bit (0–4095); CN is 20-bit (0–1 048 575).
     /// </summary>
     internal static ulong BuildHidCorporate1000(ushort fc, uint cn) => (ulong)(fc & 0xFFF) << 21 | (ulong)(cn & 0xFFFFF) << 1;

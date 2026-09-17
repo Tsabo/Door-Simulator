@@ -1,5 +1,6 @@
 @page "/cards"
 @inject CardApiClient Cards
+@inject CardFormatApiClient Formats
 
 <PageTitle>Card Library — DoorSim</PageTitle>
 
@@ -47,14 +48,24 @@ else
                                      Margin="Margin.Dense"
                                      Class="mb-4" />
 
-                    <MudSelect T="WiegandFormat" @bind-Value="_form.Format"
+                    <MudSelect T="FormatChoice" @bind-Value="_form.Choice"
                                Label="Format"
                                Variant="Variant.Outlined"
                                Margin="Margin.Dense"
-                               Class="mb-4">
-                        @foreach (var fmt in Enum.GetValues<WiegandFormat>())
+                               Class="mb-4"
+                               ToStringFunc="@DescribeChoice">
+                        <MudSelectItem Value="@BuiltInHeader" Disabled="true">Built-in</MudSelectItem>
+                        @foreach (var fmt in Enum.GetValues<WiegandFormat>().Where(f => f != WiegandFormat.Custom))
                         {
-                            <MudSelectItem Value="@fmt">@fmt</MudSelectItem>
+                            <MudSelectItem Value="@(new FormatChoice(fmt, null))">@fmt</MudSelectItem>
+                        }
+                        @if (_customFormats.Length > 0)
+                        {
+                            <MudSelectItem Value="@CustomHeader" Disabled="true">Custom</MudSelectItem>
+                            @foreach (var cf in _customFormats)
+                            {
+                                <MudSelectItem Value="@(new FormatChoice(WiegandFormat.Custom, cf.Id))">@cf.Name</MudSelectItem>
+                            }
                         }
                     </MudSelect>
 
@@ -100,7 +111,11 @@ else
             <MudTd DataLabel="Label">@context.Label</MudTd>
             <MudTd DataLabel="FC">@context.FacilityCode</MudTd>
             <MudTd DataLabel="Card #">@context.CardNumber</MudTd>
-            <MudTd DataLabel="Format">@context.Format</MudTd>
+            <MudTd DataLabel="Format">
+                @(context.Format == WiegandFormat.Custom
+                    ? _customFormats.FirstOrDefault(f => f.Id == context.CustomFormatId)?.Name ?? "Custom (deleted)"
+                    : context.Format.ToString())
+            </MudTd>
             <MudTd DataLabel="Created">@context.CreatedAt.LocalDateTime.ToString("g")</MudTd>
             <MudTd DataLabel="Actions" Style="text-align:center">
                 <MudButton Variant="Variant.Text"

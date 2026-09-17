@@ -108,4 +108,38 @@ public class CardValidationTests
         await Assert.That(error).IsNotNull();
         await Assert.That(error).Contains("card number must be between 0 and 1,048,575");
     }
+
+    [Test]
+    public async Task Validate_Custom_MissingCustomFormatId_ReturnsError()
+    {
+        var error = CardValidation.ValidateCredential(1234, 100, WiegandFormat.Custom);
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error).Contains("CustomFormatId is required");
+    }
+
+    [Test]
+    public async Task Validate_Custom_ZeroCustomFormatId_ReturnsError()
+    {
+        var error = CardValidation.ValidateCredential(1234, 100, WiegandFormat.Custom, 0);
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error).Contains("CustomFormatId is required");
+    }
+
+    [Test]
+    public async Task Validate_Custom_WithCustomFormatId_ReturnsNull()
+    {
+        // Bit-width range checking is deferred until the format definition is loaded from the DB.
+        var error = CardValidation.ValidateCredential(1234, 100, WiegandFormat.Custom, 5);
+        await Assert.That(error).IsNull();
+    }
+
+    [Test]
+    public async Task Validate_CardEntry_Custom_MissingCustomFormatId_ReturnsError()
+    {
+        var card = new CardEntry(0, "Custom Card", 100, 1234, WiegandFormat.Custom, DateTimeOffset.UtcNow);
+        var error = CardValidation.Validate(card);
+
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error).Contains("CustomFormatId is required");
+    }
 }

@@ -1,0 +1,23 @@
+@* Graded validation results. A chip-plus-text row per issue rather than MudAlert, which is too
+   heavy for a list that can run to six or seven items. *@
+
+<div class="d-flex align-center mb-4" style="gap:16px">
+    <MudText Typo="Typo.overline">Validation</MudText>
+    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@VerdictColor">
+        @VerdictLabel
+    </MudChip>
+</div>
+
+@foreach (var issue in Analysis.Issues)
+{
+    <div class="d-flex align-start mb-2" style="gap:16px">
+        <MudChip T="string"
+                 Size="Size.Small"
+                 Variant="Variant.Text"
+                 Color="@LevelColor(issue.Level)"
+                 Style="flex:none;margin-top:1px">
+            @LevelLabel(issue.Level)
+        </MudChip>
+        <MudText Typo="Typo.body2" Class="muted">@issue.Message</MudText>
+    </div>
+}

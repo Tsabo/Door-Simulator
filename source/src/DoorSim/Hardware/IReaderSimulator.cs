@@ -31,6 +31,9 @@ public interface IReaderSimulator
     /// <summary>Transmit a credential from raw values — no library entry required.</summary>
     Task SendCardAsync(uint cardNumber, ushort facilityCode, WiegandFormat format);
 
+    /// <summary>Transmit a credential from raw values using a user-defined custom format.</summary>
+    Task SendCardAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format);
+
     /// <summary>Transmit an arbitrary raw bit-stream — no format calculation.</summary>
     Task SendBitsAsync(string bits);
 
@@ -39,6 +42,9 @@ public interface IReaderSimulator
 
     /// <summary>Full access cycle from raw values — no library entry required.</summary>
     Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, WiegandFormat format, int cardToDoorDelayMs, int doorOpenMs);
+
+    /// <summary>Full access cycle from raw values using a user-defined custom format.</summary>
+    Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format, int cardToDoorDelayMs, int doorOpenMs);
 
     /// <summary>Full egress cycle: REX trips → door opens → door closes → REX resets.</summary>
     Task SimulateEgressCycleAsync(int rexLeadMs, int doorOpenMs);

@@ -46,3 +46,17 @@ body {
 
 h1 { font-size: 22px; margin: 0 0 20px; }
 h2 { font-size: 18px; margin: 0 0 16px; }
+
+/* Monospace utility. Needed by the card-format bit grid, whose fixed-width cells depend on a
+   fixed advance width, and by every mask/hex field. Global rather than scoped because it must
+   also reach the <input> MudBlazor renders inside MudTextField. */
+.mono,
+.mono input {
+    font-family: "Cascadia Code", "Consolas", monospace;
+}
+
+/* Muted body text. MudBlazor's Color.Secondary is a brand accent (pink in the default theme),
+   not "secondary text", so it is the wrong tool for de-emphasised copy. */
+.muted {
+    color: var(--mud-palette-text-secondary);
+}

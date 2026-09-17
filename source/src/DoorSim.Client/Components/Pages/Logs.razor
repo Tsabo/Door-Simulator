@@ -5,16 +5,16 @@
 
 <PageTitle>Logs — DoorSim</PageTitle>
 
-<div class="d-flex align-center justify-space-between flex-wrap ga-2 mb-4">
+<div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-4">
     <MudText Typo="Typo.h4">Logs</MudText>
-    <div class="d-flex align-center ga-2">
+    <div class="d-flex align-center gap-2">
         <MudSwitch T="bool" Value="_autoScroll" ValueChanged="OnAutoScrollChanged" Color="Color.Primary" Label="Auto-scroll" />
         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download"
                    Href="/api/logs/download" Target="_blank">Download logs</MudButton>
     </div>
 </div>
 
-<div class="d-flex align-center flex-wrap ga-2 mb-2">
+<div class="d-flex align-center flex-wrap gap-2 mb-2">
     <MudSelect T="LogSeverity" Value="_minLevel" ValueChanged="OnMinLevelChanged"
                Label="Minimum level" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:160px;">
         @foreach (var level in Enum.GetValues<LogSeverity>())

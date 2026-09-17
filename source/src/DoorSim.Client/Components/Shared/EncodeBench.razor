@@ -1,0 +1,49 @@
+@* Encode half of the test bench: test values in, hex and bit pattern out, plus the round-trip
+   verdict that catches most authoring mistakes faster than reading the issue list. *@
+
+<div class="d-flex align-center justify-space-between mb-4" style="gap:16px">
+    <MudText Typo="Typo.overline">Encode</MudText>
+    <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+             Color="@(RoundTripOk ? Color.Success : Color.Error)">
+        @(RoundTripOk ? "round trip ok" : "round trip failed")
+    </MudChip>
+</div>
+
+<div class="d-flex mb-4" style="gap:16px">
+    <MudTextField T="string"
+                  Value="@CardNumber"
+                  ValueChanged="@(value => CardNumberChanged.InvokeAsync(value))"
+                  Label="Card number"
+                  Immediate="true"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Class="mono" />
+    <MudTextField T="string"
+                  Value="@FacilityCode"
+                  ValueChanged="@(value => FacilityCodeChanged.InvokeAsync(value))"
+                  Label="Facility code"
+                  Immediate="true"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Class="mono" />
+</div>
+
+<MudText Typo="Typo.overline" Class="muted">Encoded hex</MudText>
+<MudPaper Outlined="true" Class="pa-4 mt-2 mb-4">
+    <MudText Typo="Typo.h6" Color="Color.Info" Class="mono" Style="overflow-wrap:anywhere">
+        @(Hex ?? "—")
+    </MudText>
+</MudPaper>
+
+@if (Hex is not null)
+{
+    <MudText Typo="Typo.overline" Class="muted">Bit pattern</MudText>
+    <div class="strip-scroll mt-2">
+        <div class="strip">
+            @foreach (var bit in BitsHighToLow())
+            {
+                <div class="strip-bit @StripClass(bit)" title="@BitTitle(bit)">@BitValue(bit)</div>
+            }
+        </div>
+    </div>
+}

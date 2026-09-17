@@ -1,0 +1,103 @@
+@* Bit grid: four paintable mask rows over one cell per bit, plus the raw mask strings.
+   Plain markup rather than MudTable — cells are painted, there are no row semantics, and the
+   whole thing scrolls horizontally as one unit. *@
+
+<div class="d-flex align-center justify-space-between flex-wrap mb-4" style="gap:16px">
+    <MudText Typo="Typo.overline">Bit map</MudText>
+    <MudText Typo="Typo.caption" Class="muted">
+        Pick a token, then click or drag across the bits. Bit 0 is rightmost, matching the encoder.
+    </MudText>
+</div>
+
+<div class="d-flex flex-wrap mb-4" style="gap:24px">
+    <div>
+        <MudText Typo="Typo.overline" Class="muted">Card mask tokens</MudText>
+        <div class="d-flex mt-2" style="gap:4px">
+            @foreach (var token in CardFormatAnalyzer.CardPaintTokens)
+            {
+                var cardToken = token;
+
+                <MudButton Variant="@(Tool == cardToken ? Variant.Filled : Variant.Outlined)"
+                           Color="@TokenColor(cardToken)"
+                           Size="Size.Small"
+                           title="@($"Paint {cardToken} — {RoleName(cardToken)}")"
+                           OnClick="@(() => ToolChanged.InvokeAsync(cardToken))">
+                    <span class="mono mr-2">@cardToken</span>@RoleName(cardToken)
+                </MudButton>
+            }
+        </div>
+    </div>
+    <div>
+        <MudText Typo="Typo.overline" Class="muted">Parity mask tokens</MudText>
+        <div class="d-flex mt-2" style="gap:4px">
+            @foreach (var token in CardFormatAnalyzer.ParityPaintTokens)
+            {
+                var parityToken = token;
+
+                <MudButton Variant="@(Tool == parityToken ? Variant.Filled : Variant.Outlined)"
+                           Color="@TokenColor(parityToken)"
+                           Size="Size.Small"
+                           title="@($"Paint {parityToken} — {RoleName(parityToken)}")"
+                           OnClick="@(() => ToolChanged.InvokeAsync(parityToken))">
+                    <span class="mono mr-2">@parityToken</span>@RoleName(parityToken)
+                </MudButton>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="grid-scroll" @onmouseup="StopPaint" @onmouseleave="StopPaint">
+    <div class="grid-body">
+        <div class="grid-row">
+            <div class="grid-label"></div>
+            @for (var bit = Bits - 1; bit >= 0; bit--)
+            {
+                <div class="bit-number">@(bit % 4 == 0 ? bit.ToString() : "")</div>
+            }
+        </div>
+
+        @for (var row = 0; row < RowLabels.Length; row++)
+        {
+            var rowIndex = row;
+            var mask = MaskAt(rowIndex);
+
+            <div class="grid-row">
+                <div class="grid-label">@RowLabels[rowIndex]</div>
+                @for (var i = 0; i < mask.Length; i++)
+                {
+                    var cellIndex = i;
+                    var token = mask[cellIndex];
+
+                    <div class="bit @TokenClass(token)"
+                         title="bit @(Bits - 1 - cellIndex) — @RoleName(token)"
+                         @onmousedown="() => StartPaint(rowIndex, cellIndex)"
+                         @onmousedown:preventDefault
+                         @onmouseenter="() => ContinuePaint(rowIndex, cellIndex)">@Display(token)</div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<div class="mt-6">
+    <MudText Typo="Typo.overline">Mask strings</MudText>
+    @for (var row = 0; row < RowLabels.Length; row++)
+    {
+        var rowIndex = row;
+
+        <div class="d-flex align-center mt-2" style="gap:16px">
+            <MudText Typo="Typo.caption" Class="muted" Style="width:104px;flex:none">
+                @RowLabels[rowIndex]
+            </MudText>
+            <MudTextField T="string"
+                          Value="@MaskAt(rowIndex)"
+                          ValueChanged="@(value => OnMaskTyped(rowIndex, value))"
+                          Immediate="true"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mono"
+                          aria-label="@($"{RowLabels[rowIndex]} string")"
+                          spellcheck="false" />
+        </div>
+    }
+</div>

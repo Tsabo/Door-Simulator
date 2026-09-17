@@ -25,6 +25,8 @@ public class SimulationEventEntity
 
     public WiegandFormat? Format { get; set; }
 
+    public int? CustomFormatId { get; set; }
+
     public string? RawBits { get; set; }
 
     public DateTimeOffset EnqueuedAt { get; set; }
@@ -45,7 +47,7 @@ public class SimulationEventEntity
         ItemId, DoorId, Label, Protocol, Kind, Outcome,
         CardEntryId, CardNumber, FacilityCode, Format, RawBits,
         EnqueuedAt, StartedAt, CompletedAt,
-        QueueWaitMs, DurationMs, QueueDepthAtEnqueue, Error);
+        QueueWaitMs, DurationMs, QueueDepthAtEnqueue, Error, CustomFormatId);
 
     public static SimulationEventEntity FromDto(SimulationEventRecord dto) => new()
     {
@@ -59,6 +61,7 @@ public class SimulationEventEntity
         CardNumber = dto.CardNumber,
         FacilityCode = dto.FacilityCode,
         Format = dto.Format,
+        CustomFormatId = dto.CustomFormatId,
         RawBits = dto.RawBits,
         EnqueuedAt = dto.EnqueuedAt,
         StartedAt = dto.StartedAt,
@@ -66,6 +69,6 @@ public class SimulationEventEntity
         QueueWaitMs = dto.QueueWaitMs,
         DurationMs = dto.DurationMs,
         QueueDepthAtEnqueue = dto.QueueDepthAtEnqueue,
-        Error = dto.Error,
+        Error = dto.Error
     };
 }

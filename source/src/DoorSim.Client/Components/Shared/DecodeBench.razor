@@ -1,0 +1,51 @@
+@* Decode half of the test bench: a credential in hex back to its fields, with a pass/fail row
+   per parity rule so you can see which rule failed rather than just that one did. *@
+
+<div class="d-flex align-center justify-space-between mb-4" style="gap:16px">
+    <MudText Typo="Typo.overline">Decode</MudText>
+    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@StatusColor">
+        @StatusLabel
+    </MudChip>
+</div>
+
+<MudTextField T="string"
+              Value="@Hex"
+              ValueChanged="@(value => HexChanged.InvokeAsync(value))"
+              Label="Credential hex"
+              Immediate="true"
+              Variant="Variant.Outlined"
+              Margin="Margin.Dense"
+              Class="mono mb-4"
+              spellcheck="false" />
+
+<div class="d-flex mb-4" style="gap:32px">
+    <div>
+        <MudText Typo="Typo.overline" Class="muted">Card number</MudText>
+        <MudText Typo="Typo.h6" Class="mono">@(Result?.CardNumber.ToString() ?? "—")</MudText>
+    </div>
+    <div>
+        <MudText Typo="Typo.overline" Class="muted">Facility code</MudText>
+        <MudText Typo="Typo.h6" Class="mono">@(Result?.FacilityCode.ToString() ?? "—")</MudText>
+    </div>
+</div>
+
+@if (Result is { } result && result.Parity.Count > 0)
+{
+    <MudText Typo="Typo.overline" Class="muted">Parity rules</MudText>
+
+    @for (var i = 0; i < result.Parity.Count; i++)
+    {
+        var rule = result.Parity[i];
+        var number = i + 1;
+
+        <div class="d-flex align-center mt-2" style="gap:16px">
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                     Color="@(rule.Ok ? Color.Success : Color.Error)" Style="flex:none">
+                @($"P{number} {(rule.Ok ? "ok" : "fail")}")
+            </MudChip>
+            <MudText Typo="Typo.caption" Class="mono muted">
+                @Describe(rule)
+            </MudText>
+        </div>
+    }
+}

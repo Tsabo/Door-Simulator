@@ -273,14 +273,18 @@ public class SimulationQueueTests
     private sealed class RecordingReaderSimulator : IReaderSimulator
     {
         public int SendCount { get; private set; }
+
         public Func<Task>? OnSendCard { get; set; }
 
         public DoorConfiguration Config { get; } = new(1, "Recording", ProtocolType.Wiegand,
             null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         public bool IsConnected => true;
+
         public ReaderLedState? LedState => null;
+
         public bool IsDoorOpen => false;
+
         public bool IsRexActive => false;
 
         public Task SendCardAsync(CardEntry card) => SendCardAsync(card.CardNumber, card.FacilityCode, card.Format);
@@ -292,13 +296,24 @@ public class SimulationQueueTests
                 await OnSendCard();
         }
 
+        public Task SendCardAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format) => Task.CompletedTask;
+
         public Task SendBitsAsync(string bits) => Task.CompletedTask;
+
         public Task SimulateAccessCycleAsync(CardEntry card, int cardToDoorDelayMs, int doorOpenMs) => Task.CompletedTask;
+
         public Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, WiegandFormat format, int cardToDoorDelayMs, int doorOpenMs) => Task.CompletedTask;
+
+        public Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format, int cardToDoorDelayMs, int doorOpenMs) => Task.CompletedTask;
+
         public Task SimulateEgressCycleAsync(int rexLeadMs, int doorOpenMs) => Task.CompletedTask;
+
         public Task OpenDoorAsync() => Task.CompletedTask;
+
         public Task CloseDoorAsync() => Task.CompletedTask;
+
         public Task TripRexAsync() => Task.CompletedTask;
+
         public Task ResetRexAsync() => Task.CompletedTask;
     }
 

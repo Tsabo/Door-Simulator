@@ -162,7 +162,7 @@ public class WiegandTransmitterTests
     }
 
     // -------------------------------------------------------------------------
-    // HID Corporate 1000 (H10302) — 35-bit, no parity
+    // HID Corporate 1000 — 35-bit, no parity
     // -------------------------------------------------------------------------
 
     [Test]
@@ -176,7 +176,7 @@ public class WiegandTransmitterTests
     public async Task BuildHidCorporate1000_DataBitsRoundTrip()
     {
         ushort fc = 0xABC & 0xFFF; // 12-bit
-        uint cn   = 0xABCDE & 0xFFFFF; // 20-bit
+        uint cn = 0xABCDE & 0xFFFFF; // 20-bit
         var frame = WiegandTransmitter.BuildHidCorporate1000(fc, cn);
 
         // FC sits at bits 32-21 (LSB-0); CN sits at bits 20-1 (LSB-0)

@@ -154,6 +154,38 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
     }
 
     /// <inheritdoc />
+    public Task SendCardAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format)
+    {
+        if (_device is null)
+        {
+            _logger.LogWarning(
+                "Door {Id} ({Label}): no serial port — card send skipped.",
+                Config.Id, Config.Label);
+
+            return Task.CompletedTask;
+        }
+
+        if (!_device.IsConnected)
+        {
+            _logger.LogWarning(
+                "Door {Id} ({Label}): OSDP not connected — card send skipped.",
+                Config.Id, Config.Label);
+
+            return Task.CompletedTask;
+        }
+
+        var (frame, bitCount) = BuildFrame(cardNumber, facilityCode, format);
+        var cardData = new RawCardData(0, FormatCode.Wiegand, FrameToBitArray(frame, bitCount));
+        _device.EnqueuePollReply(cardData);
+
+        _logger.LogInformation(
+            "Door {Id} ({Label}): queued osdp_RAW custom format '{FormatName}' FC={FC} Card={Card} ({Bits} bits) — {Data}",
+            Config.Id, Config.Label, format.Name, facilityCode, cardNumber, bitCount, cardData);
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
     public Task SendBitsAsync(string bits)
     {
         if (_device is null)
@@ -202,6 +234,18 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
 
     /// <inheritdoc />
     public async Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, WiegandFormat format, int cardToDoorDelayMs, int doorOpenMs)
+    {
+        await SendCardAsync(cardNumber, facilityCode, format).ConfigureAwait(false);
+        if (cardToDoorDelayMs > 0)
+            await Task.Delay(cardToDoorDelayMs).ConfigureAwait(false);
+
+        await OpenDoorAsync().ConfigureAwait(false);
+        await Task.Delay(doorOpenMs).ConfigureAwait(false);
+        await CloseDoorAsync().ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format, int cardToDoorDelayMs, int doorOpenMs)
     {
         await SendCardAsync(cardNumber, facilityCode, format).ConfigureAwait(false);
         if (cardToDoorDelayMs > 0)
@@ -293,6 +337,13 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
             WiegandFormat.HidCorporate1000 => (WiegandTransmitter.BuildHidCorporate1000(facilityCode, cardNumber), 35),
             _ => throw new ArgumentOutOfRangeException(nameof(format), format, null)
         };
+
+    private static (ulong frame, int bitCount) BuildFrame(uint cardNumber, ushort facilityCode, CustomCardFormat format)
+    {
+        var encoder = new CardFormatEncoder(format.CardMask, format.Parity1Mask, format.Parity2Mask, format.Parity3Mask);
+
+        return (encoder.Encode(cardNumber, facilityCode), format.CardMask.Length);
+    }
 
     /// <summary>
     /// Converts a WiegandTransmitter ulong frame (MSB at bit <paramref name="bitCount" />-1)

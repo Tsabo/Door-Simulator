@@ -1,0 +1,101 @@
+/* The bit grid. MudBlazor has no component for this: cells are painted, there are no row
+   semantics, and the grid scrolls horizontally as one unit rather than wrapping — a wrapped
+   bit map is unreadable. Colours come from the theme palette so the grid follows it. */
+
+.grid-scroll {
+    overflow-x: auto;
+    padding-bottom: 12px;
+}
+
+.grid-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: max-content;
+}
+
+.grid-row {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+}
+
+.grid-label {
+    width: 104px;
+    flex: none;
+    font-size: .75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.bit-number {
+    width: 22px;
+    flex: none;
+    text-align: center;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 9px;
+    line-height: 1.2;
+    color: var(--mud-palette-text-disabled);
+}
+
+.bit {
+    width: 22px;
+    height: 26px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 12px;
+    border-radius: 2px;
+    cursor: pointer;
+    user-select: none;
+    /* No transition: cells change in bulk during a drag. */
+}
+
+/* Each non-X token is a low-alpha tint with a mid-alpha border, so four stacked rows of tinted
+   cells stay calm. Text uses the -darken shade, which stays legible on a pale tint; the -text
+   variables are contrast colours meant for a filled surface. */
+.bit--c {
+    background: rgba(var(--mud-palette-info-rgb), .18);
+    border: 1px solid rgba(var(--mud-palette-info-rgb), .40);
+    color: var(--mud-palette-info-darken);
+}
+
+.bit--f {
+    background: rgba(var(--mud-palette-tertiary-rgb), .18);
+    border: 1px solid rgba(var(--mud-palette-tertiary-rgb), .40);
+    color: var(--mud-palette-tertiary-darken);
+}
+
+.bit--p {
+    background: rgba(var(--mud-palette-warning-rgb), .14);
+    border: 1px solid rgba(var(--mud-palette-warning-rgb), .32);
+    color: var(--mud-palette-warning-darken);
+}
+
+.bit--one {
+    background: rgba(var(--mud-palette-success-rgb), .18);
+    border: 1px solid rgba(var(--mud-palette-success-rgb), .40);
+    color: var(--mud-palette-success-darken);
+}
+
+.bit--zero {
+    background: rgba(var(--mud-palette-error-rgb), .18);
+    border: 1px solid rgba(var(--mud-palette-error-rgb), .40);
+    color: var(--mud-palette-error-darken);
+}
+
+/* The parity bit is the one bit the encoder writes, so it reads as different in kind from the
+   range it covers: solid fill rather than a tint. */
+.bit--eo {
+    background: var(--mud-palette-primary);
+    border: 1px solid var(--mud-palette-primary);
+    color: var(--mud-palette-primary-text);
+    font-weight: 600;
+}
+
+.bit--x {
+    background: var(--mud-palette-background);
+    border: 1px solid var(--mud-palette-lines-default);
+    color: var(--mud-palette-text-disabled);
+}

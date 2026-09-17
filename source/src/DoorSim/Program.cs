@@ -26,7 +26,7 @@ var builder = WebApplication.CreateBuilder(args);
 // container exists. The same instance is registered into DI below so LogsEndpoints can inject it.
 var logBus = new LogEventBus();
 var logDirectory = builder.Configuration["Logs:Directory"]
-                    ?? Path.Combine(builder.Environment.ContentRootPath, "logs");
+                   ?? Path.Combine(builder.Environment.ContentRootPath, "logs");
 
 builder.Host.UseSerilog((ctx, lc) =>
 {
@@ -67,6 +67,7 @@ builder.Services.AddSingleton<GpioController?>(sp =>
     if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
     {
         log.LogWarning("Not running on Linux — GPIO disabled (dev mode)");
+
         return null;
     }
 
@@ -74,11 +75,13 @@ builder.Services.AddSingleton<GpioController?>(sp =>
     {
         var gpio = new GpioController();
         log.LogInformation("GPIO controller initialized");
+
         return gpio;
     }
     catch (Exception ex)
     {
         log.LogWarning(ex, "Failed to open GPIO controller — simulation-only mode");
+
         return null;
     }
 });
@@ -101,6 +104,7 @@ builder.Services.AddDbContext<DoorSimDbContext>(opt =>
                   ?? "Data Source=doorsim.db"));
 
 builder.Services.AddScoped<CardLibraryService>();
+builder.Services.AddScoped<CardFormatService>();
 builder.Services.AddScoped<DoorConfigService>();
 
 builder.Services.AddProblemDetails();
@@ -121,7 +125,7 @@ builder.Services.AddOpenApi(options =>
             Title = "DoorSim API",
             Version = "v1",
             Description = "Access-control reader/door simulator API — "
-                          + "card library, door configuration, and simulation control.",
+                          + "card library, door configuration, and simulation control."
         };
 
         return Task.CompletedTask;
@@ -185,6 +189,7 @@ app.UseRouting();
 // -------------------------------------------------------------------------
 
 app.MapCardsEndpoints();
+app.MapCardFormatsEndpoints();
 app.MapDoorsEndpoints();
 app.MapSimulationEndpoints();
 app.MapSettingsEndpoints();

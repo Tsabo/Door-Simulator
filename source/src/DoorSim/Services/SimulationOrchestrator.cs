@@ -40,14 +40,19 @@ public class SimulationOrchestrator(
             throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
 
         CardEntry? card = null;
+        CustomCardFormat? customFormat = null;
         if (request.EventType != DoorEventType.EgressCycle)
+        {
             card = await ResolveCardAsync(request.CardEntryId, request.ReaderId).ConfigureAwait(false);
+            if (card.Format == WiegandFormat.Custom)
+                customFormat = await ResolveCustomFormatAsync(card.CustomFormatId, request.ReaderId).ConfigureAwait(false);
+        }
 
         var description = request.EventType switch
         {
             DoorEventType.EgressCycle => "Egress Cycle",
             DoorEventType.AccessCycle => $"Access Cycle ({card?.Label ?? $"#{card?.CardNumber}"})",
-            var _ => $"Card Read ({card?.Label ?? $"#{card?.CardNumber}"})",
+            _ => $"Card Read ({card?.Label ?? $"#{card?.CardNumber}"})"
         };
 
         var queue = GetOrCreateQueue(request.ReaderId);
@@ -58,6 +63,13 @@ public class SimulationOrchestrator(
 
                 if (request.EventType == DoorEventType.EgressCycle)
                     await simulator.SimulateEgressCycleAsync(t.RexLeadMs, t.DoorOpenMs).ConfigureAwait(false);
+                else if (customFormat is not null)
+                {
+                    if (request.EventType == DoorEventType.CardReadOnly)
+                        await simulator.SendCardAsync(card!.CardNumber, card.FacilityCode, customFormat).ConfigureAwait(false);
+                    else
+                        await simulator.SimulateAccessCycleAsync(card!.CardNumber, card.FacilityCode, customFormat, t.CardToDoorDelayMs, t.DoorOpenMs).ConfigureAwait(false);
+                }
                 else
                 {
                     if (request.EventType == DoorEventType.CardReadOnly)
@@ -70,7 +82,8 @@ public class SimulationOrchestrator(
                 request.CardEntryId,
                 card?.CardNumber,
                 card?.FacilityCode,
-                card?.Format))
+                card?.Format,
+                CustomFormatId: card?.CustomFormatId))
             .ConfigureAwait(false);
     }
 
@@ -83,18 +96,26 @@ public class SimulationOrchestrator(
         if (!bank.TryGetReader(request.ReaderId, out var simulator))
             throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
 
+        CustomCardFormat? customFormat = null;
+        if (request.Format == WiegandFormat.Custom)
+            customFormat = await ResolveCustomFormatAsync(request.CustomFormatId, request.ReaderId).ConfigureAwait(false);
+
         var description = $"Raw Card {request.Format} FC:{request.FacilityCode} #{request.CardNumber}";
         var queue = GetOrCreateQueue(request.ReaderId);
 
         await queue.EnqueueAsync(async itemCt =>
             {
                 itemCt.ThrowIfCancellationRequested();
-                await simulator.SendCardAsync(request.CardNumber, request.FacilityCode, request.Format).ConfigureAwait(false);
+                if (customFormat is not null)
+                    await simulator.SendCardAsync(request.CardNumber, request.FacilityCode, customFormat).ConfigureAwait(false);
+                else
+                    await simulator.SendCardAsync(request.CardNumber, request.FacilityCode, request.Format).ConfigureAwait(false);
             }, description, DoorEventType.CardReadOnly, ct, new SimulationEventContext(
                 SimulationEventKind.CardReadOnly,
                 CardNumber: request.CardNumber,
                 FacilityCode: request.FacilityCode,
-                Format: request.Format))
+                Format: request.Format,
+                CustomFormatId: request.CustomFormatId))
             .ConfigureAwait(false);
     }
 
@@ -121,14 +142,19 @@ public class SimulationOrchestrator(
         if (!bank.TryGetReader(request.ReaderId, out var simulator))
             throw new KeyNotFoundException($"Reader {request.ReaderId} not found in the active bank.");
 
+        var isEgress = request.EventType == DoorEventType.EgressCycle;
+
+        CustomCardFormat? customFormat = null;
+        if (!isEgress && request.Format == WiegandFormat.Custom)
+            customFormat = await ResolveCustomFormatAsync(request.CustomFormatId, request.ReaderId).ConfigureAwait(false);
+
         var description = request.EventType switch
         {
             DoorEventType.EgressCycle => "Raw Egress Cycle",
             DoorEventType.AccessCycle => $"Raw Access Cycle ({request.Format} FC:{request.FacilityCode} #{request.CardNumber})",
-            var _ => $"Raw Card Read ({request.Format} FC:{request.FacilityCode} #{request.CardNumber})",
+            _ => $"Raw Card Read ({request.Format} FC:{request.FacilityCode} #{request.CardNumber})"
         };
 
-        var isEgress = request.EventType == DoorEventType.EgressCycle;
         var queue = GetOrCreateQueue(request.ReaderId);
         await queue.EnqueueAsync(async itemCt =>
             {
@@ -137,6 +163,13 @@ public class SimulationOrchestrator(
 
                 if (request.EventType == DoorEventType.EgressCycle)
                     await simulator.SimulateEgressCycleAsync(t.RexLeadMs, t.DoorOpenMs).ConfigureAwait(false);
+                else if (customFormat is not null)
+                {
+                    if (request.EventType == DoorEventType.CardReadOnly)
+                        await simulator.SendCardAsync(request.CardNumber, request.FacilityCode, customFormat).ConfigureAwait(false);
+                    else
+                        await simulator.SimulateAccessCycleAsync(request.CardNumber, request.FacilityCode, customFormat, t.CardToDoorDelayMs, t.DoorOpenMs).ConfigureAwait(false);
+                }
                 else if (request.EventType == DoorEventType.CardReadOnly)
                     await simulator.SendCardAsync(request.CardNumber, request.FacilityCode, request.Format).ConfigureAwait(false);
                 else
@@ -151,7 +184,10 @@ public class SimulationOrchestrator(
                     : request.FacilityCode,
                 Format: isEgress
                     ? null
-                    : request.Format))
+                    : request.Format,
+                CustomFormatId: isEgress
+                    ? null
+                    : request.CustomFormatId))
             .ConfigureAwait(false);
     }
 
@@ -197,6 +233,7 @@ public class SimulationOrchestrator(
         if (!bank.TryGetReader(readerId, out var simulator))
         {
             logger.LogWarning("Reader {R}: {Action} ignored — reader not found in bank", readerId, action);
+
             return;
         }
 
@@ -272,7 +309,7 @@ public class SimulationOrchestrator(
                 queue?.QueueDepth ?? 0,
                 queue?.CurrentAction,
                 queue?.GetSnapshot() ?? []);
-        }),
+        })
     ];
 
     /// <summary>
@@ -285,6 +322,7 @@ public class SimulationOrchestrator(
         while (!ct.IsCancellationRequested)
         {
             yield return GetAllStatuses();
+
             try
             {
                 await Task.Delay(intervalMs, ct).ConfigureAwait(false);
@@ -322,7 +360,7 @@ public class SimulationOrchestrator(
         if (_queues.TryRemove(readerId, out var queue))
             await queue.DisposeAsync().ConfigureAwait(false);
 
-        _status.TryRemove(readerId, out var _);
+        _status.TryRemove(readerId, out _);
         metrics.RemoveDoor(readerId);
     }
 
@@ -351,7 +389,7 @@ public class SimulationOrchestrator(
     {
         DoorEventType.AccessCycle => SimulationEventKind.AccessCycle,
         DoorEventType.EgressCycle => SimulationEventKind.EgressCycle,
-        var _ => SimulationEventKind.CardReadOnly,
+        _ => SimulationEventKind.CardReadOnly
     };
 
     private void SetStatus(int readerId, SimulationStatus status) =>
@@ -367,5 +405,17 @@ public class SimulationOrchestrator(
 
         return await cards.GetAsync(cardEntryId.Value).ConfigureAwait(false)
                ?? throw new KeyNotFoundException($"Card {cardEntryId} not found in library.");
+    }
+
+    private async Task<CustomCardFormat> ResolveCustomFormatAsync(int? customFormatId, int readerId)
+    {
+        if (customFormatId is null)
+            throw new InvalidOperationException($"Reader {readerId}: CustomFormatId is required when Format is Custom.");
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var formats = scope.ServiceProvider.GetRequiredService<CardFormatService>();
+
+        return await formats.GetAsync(customFormatId.Value).ConfigureAwait(false)
+               ?? throw new KeyNotFoundException($"Custom format {customFormatId} not found.");
     }
 }

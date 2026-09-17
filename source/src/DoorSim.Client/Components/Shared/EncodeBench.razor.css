@@ -1,0 +1,39 @@
+/* The encoded bit-pattern strip: the same cell construction as the bit grid at a smaller size. */
+
+.strip-scroll {
+    overflow-x: auto;
+    padding-bottom: 8px;
+}
+
+.strip {
+    display: flex;
+    gap: 1px;
+    width: max-content;
+}
+
+.strip-bit {
+    width: 16px;
+    height: 22px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 11px;
+    border-radius: 2px;
+}
+
+.strip-bit--parity {
+    background: rgba(var(--mud-palette-info-rgb), .18);
+    color: var(--mud-palette-info-darken);
+}
+
+.strip-bit--set {
+    background: var(--mud-palette-action-disabled-background);
+    color: var(--mud-palette-text-primary);
+}
+
+.strip-bit--clear {
+    background: var(--mud-palette-background);
+    color: var(--mud-palette-text-disabled);
+}

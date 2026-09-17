@@ -14,7 +14,9 @@ public class CardEntity
 
     public DateTimeOffset CreatedAt { get; set; }
 
-    public CardEntry ToDto() => new(Id, Label, FacilityCode, CardNumber, Format, CreatedAt);
+    public int? CustomFormatId { get; set; }
+
+    public CardEntry ToDto() => new(Id, Label, FacilityCode, CardNumber, Format, CreatedAt, CustomFormatId);
 
     public static CardEntity FromDto(CardEntry dto) => new()
     {
@@ -23,6 +25,7 @@ public class CardEntity
         FacilityCode = dto.FacilityCode,
         CardNumber = dto.CardNumber,
         Format = dto.Format,
-        CreatedAt = dto.CreatedAt
+        CreatedAt = dto.CreatedAt,
+        CustomFormatId = dto.CustomFormatId
     };
 }
