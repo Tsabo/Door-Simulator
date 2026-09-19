@@ -34,6 +34,7 @@ else
 
     <MudTable Items="_doors" Dense="true" Striped="true" Hover="true">
         <HeaderContent>
+            <MudTh>Id</MudTh>
             <MudTh>Label</MudTh>
             <MudTh>Protocol</MudTh>
             <MudTh>D0 / Port</MudTh>
@@ -45,6 +46,7 @@ else
             <MudTh Style="text-align:center">Actions</MudTh>
         </HeaderContent>
         <RowTemplate>
+            <MudTd DataLabel="Id">@context.Id</MudTd>
             <MudTd DataLabel="Label">@context.Label</MudTd>
             <MudTd DataLabel="Protocol">
                 <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">
@@ -76,18 +78,14 @@ else
             <MudTd DataLabel="DPS">@FormatContact(context.DpsPin, context.DpsModbusChannel)</MudTd>
             <MudTd DataLabel="REX">@FormatContact(context.RexPin, context.RexModbusChannel)</MudTd>
             <MudTd DataLabel="Actions" Style="text-align:center">
-                <MudButton Variant="Variant.Text"
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
                            Color="Color.Primary"
                            Size="Size.Small"
-                           OnClick="() => OpenEditDialogAsync(context)">
-                    Edit
-                </MudButton>
-                <MudButton Variant="Variant.Text"
+                           OnClick="() => OpenEditDialogAsync(context)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
                            Color="Color.Error"
                            Size="Size.Small"
-                           OnClick="() => DeleteAsync(context.Id)">
-                    Delete
-                </MudButton>
+                           OnClick="() => DeleteAsync(context.Id)" />
             </MudTd>
         </RowTemplate>
         <NoRecordsContent>

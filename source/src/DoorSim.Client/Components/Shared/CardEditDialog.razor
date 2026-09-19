@@ -1,0 +1,69 @@
+@inject CardApiClient Cards
+@inject CardFormatApiClient Formats
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_form.Label"
+                      Label="Label"
+                      Placeholder="e.g. Main Lobby Badge"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Class="mb-4 mt-4" />
+
+        <MudNumericField T="int" @bind-Value="_form.FacilityCode"
+                          Label="Facility Code (0–65535)"
+                          Min="0"
+                          Max="65535"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-4" />
+
+        <MudNumericField T="uint" @bind-Value="_form.CardNumber"
+                          Label="Card Number"
+                          Min="0"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-4" />
+
+        <MudSelect T="FormatChoice" @bind-Value="_form.Choice"
+                   Label="Format"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Class="mb-4"
+                   ToStringFunc="@DescribeChoice">
+            <MudSelectItem Value="@BuiltInHeader" Disabled="true">Built-in</MudSelectItem>
+            @foreach (var fmt in Enum.GetValues<WiegandFormat>().Where(f => f != WiegandFormat.Custom))
+            {
+                <MudSelectItem Value="@(new FormatChoice(fmt, null))">@fmt</MudSelectItem>
+            }
+            @if (_customFormats.Length > 0)
+            {
+                <MudSelectItem Value="@CustomHeader" Disabled="true">Custom</MudSelectItem>
+                @foreach (var cf in _customFormats)
+                {
+                    <MudSelectItem Value="@(new FormatChoice(WiegandFormat.Custom, cf.Id))">@cf.Name</MudSelectItem>
+                }
+            }
+        </MudSelect>
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">
+                @_error
+            </MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="SaveAsync"
+                   Disabled="@_saving">
+            @(_saving ? "Saving…" : (Editing is null ? "Add" : "Save"))
+        </MudButton>
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Default"
+                   OnClick="Cancel">
+            Cancel
+        </MudButton>
+    </DialogActions>
+</MudDialog>
