@@ -9,10 +9,197 @@
     <link href="DoorSim.Client.styles.css" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+
+    <!--
+        DoorSim boot animation.
+
+        Inlined on purpose: it paints on the first frame, before app.css and
+        MudBlazor.min.css have landed, and it leaves with the rest of #app the
+        moment Blazor renders the root component. Move it to css/app.css if you
+        would rather keep index.html thin.
+
+        Everything is driven by the two custom properties Blazor publishes on
+        <html> while boot resources download:
+
+            --blazor-load-percentage        e.g. 42%
+            --blazor-load-percentage-text   e.g. "42%"
+
+        0% = door wide open   ·   100% = door shut and secured
+    -->
+    <style>
+        .dsb {
+            --dsb-p: var(--blazor-load-percentage, 0%);
+            --dsb-ease: cubic-bezier(.22,.75,.28,1);
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: grid;
+            justify-items: center;
+            align-content: center;
+            gap: 1.15rem;
+            padding: 2rem 1rem;
+            font-family: Roboto, "Segoe UI", system-ui, sans-serif;
+            color: #191e25;
+        }
+
+        .dsb-door {
+            position: relative;
+            width: clamp(116px, 26vmin, 176px);
+            aspect-ratio: 80 / 112;
+        }
+
+        .dsb-door__frame {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /*  The swinging leaf. Hinged on its left stile, it closes as the
+            percentage climbs. `scale` accepts a percentage, so the variable
+            drops straight in unconverted; the clip-path taper foreshortens the
+            free edge so the leaf reads as swinging away rather than squashing.  */
+        .dsb-door__panel {
+            position: absolute;
+            left: 8.75%;      /*  7 / 80  */
+            top: 6.25%;       /*  7 / 112 */
+            width: 75%;       /* 60 / 80  */
+            height: 78.571%;  /* 88 / 112 */
+            display: block;
+            --dsb-taper: calc(4.5% - var(--dsb-p) * .045);
+            transform-origin: left center;
+            scale: var(--dsb-p) 100%;
+            clip-path: polygon(0% 0%, 100% var(--dsb-taper), 100% calc(100% - var(--dsb-taper)), 0% 100%);
+            transition: scale .5s var(--dsb-ease), clip-path .5s var(--dsb-ease);
+        }
+
+        /*  Open-state details fade out as the door shuts, and vice versa.
+            `opacity` takes a percentage too, so no conversion is needed.  */
+        .dsb-when-open {
+            opacity: calc(100% - var(--dsb-p));
+            transition: opacity .5s var(--dsb-ease);
+        }
+
+        .dsb-when-shut {
+            opacity: var(--dsb-p);
+            transition: opacity .5s var(--dsb-ease);
+        }
+
+        .dsb-blink {
+            animation: dsb-blink 2.6s ease-in-out infinite;
+        }
+
+        @keyframes dsb-blink {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: .42; }
+        }
+
+        .dsb-caption {
+            margin: 0;
+            font-size: .9rem;
+            font-weight: 400;
+        }
+
+        .dsb-pct {
+            font-variant-numeric: tabular-nums;
+            color: #191e25;
+        }
+
+        .dsb-pct::after {
+            content: var(--blazor-load-percentage-text, "0%");
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .dsb-door__panel, .dsb-when-open, .dsb-when-shut { transition-duration: .01ms; }
+            .dsb-blink { animation: none; }
+        }
+    </style>
 </head>
 <body>
     <div id="app">
-        <div class="loading">Loading DoorSim&hellip;</div>
+        <div class="dsb" role="status" aria-label="Loading DoorSim">
+            <div class="dsb-door">
+                <svg class="dsb-door__frame" viewBox="0 0 80 112" aria-hidden="true">
+                    <defs>
+                        <radialGradient id="dsbHalo" cx="46%" cy="46%" r="52%">
+                            <stop offset="0%" stop-color="#ffd98a" stop-opacity=".30" />
+                            <stop offset="100%" stop-color="#ffd98a" stop-opacity="0" />
+                        </radialGradient>
+                        <radialGradient id="dsbGlow" cx="58%" cy="44%" r="58%">
+                            <stop offset="0%" stop-color="#ffe6a6" stop-opacity=".42" />
+                            <stop offset="100%" stop-color="#ffe6a6" stop-opacity="0" />
+                        </radialGradient>
+                    </defs>
+
+                    <!-- light spilling out of the opening, past the frame -->
+                    <rect class="dsb-when-open" x="0" y="0" width="80" height="112" fill="url(#dsbHalo)" />
+
+                    <rect x="3" y="3" width="74" height="106" rx="11" fill="rgba(0,0,0,.22)" />
+                    <rect x="0" y="0" width="74" height="106" rx="11" fill="#3E2723" />
+                    <rect x="1" y="1" width="72" height="104" rx="10" fill="none"
+                          stroke="rgba(255,255,255,.07)" stroke-width="1" />
+
+                    <rect x="7" y="7" width="60" height="88" rx="3" fill="#0d1520" />
+                    <rect class="dsb-when-open" x="7" y="7" width="60" height="88" rx="3" fill="url(#dsbGlow)" />
+
+                    <rect x="7" y="7" width="4.5" height="88" fill="#5D4037" />
+                    <rect x="10.6" y="7" width="1" height="88" fill="#4a332b" />
+                    <circle class="dsb-when-open" cx="9.3" cy="51.5" r="2.6" fill="#D4AC0D" />
+                    <circle class="dsb-when-open" cx="8.5" cy="50.7" r=".8" fill="rgba(255,255,255,.4)" />
+
+                    <line x1="12" y1="97" x2="62" y2="97" stroke="rgba(255,255,255,.12)" stroke-width=".8" />
+                    <g class="dsb-blink">
+                        <circle class="dsb-when-open" cx="16" cy="101.4" r="1.9" fill="#66BB6A" />
+                        <circle class="dsb-when-shut" cx="16" cy="101.4" r="1.9" fill="#EF5350" />
+                    </g>
+                    <text x="21.5" y="103.2" font-family="Roboto, system-ui, sans-serif" font-size="4.8"
+                          fill="rgba(255,255,255,.42)" letter-spacing=".4">NC · FAIL SECURE</text>
+                </svg>
+
+                <svg class="dsb-door__panel" viewBox="0 0 60 88" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="dsbFace" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0" stop-color="#5a3e34" />
+                            <stop offset=".38" stop-color="#6D4C41" />
+                            <stop offset="1" stop-color="#7b574a" />
+                        </linearGradient>
+                        <linearGradient id="dsbEdge" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0" stop-color="#ffd98a" stop-opacity="0" />
+                            <stop offset="1" stop-color="#ffd98a" stop-opacity=".22" />
+                        </linearGradient>
+                        <filter id="dsbPanelShadow" x="-8%" y="-8%" width="116%" height="116%">
+                            <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#00000038" />
+                        </filter>
+                    </defs>
+
+                    <rect x="0" y="0" width="60" height="88" rx="3" fill="url(#dsbFace)" />
+
+                    <rect x="6" y="6" width="48" height="31" rx="2.5" fill="#7B5448" filter="url(#dsbPanelShadow)" />
+                    <rect x="6" y="6" width="48" height="31" rx="2.5" fill="none" stroke="#5D4037" stroke-width="1.2" />
+                    <rect x="7" y="7" width="48" height="31" rx="2.5" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1" />
+                    <rect x="6" y="43" width="48" height="37" rx="2.5" fill="#7B5448" filter="url(#dsbPanelShadow)" />
+                    <rect x="6" y="43" width="48" height="37" rx="2.5" fill="none" stroke="#5D4037" stroke-width="1.2" />
+                    <rect x="7" y="44" width="48" height="37" rx="2.5" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1" />
+
+                    <rect x="0" y="9" width="5" height="10" rx="1.5" fill="#4E342E" />
+                    <rect x="1" y="9.5" width="2" height="9" rx="1" fill="rgba(255,255,255,.12)" />
+                    <rect x="0" y="66" width="5" height="10" rx="1.5" fill="#4E342E" />
+                    <rect x="1" y="66.5" width="2" height="9" rx="1" fill="rgba(255,255,255,.12)" />
+
+                    <rect x="51" y="38" width="7" height="13" rx="2" fill="#4E342E" />
+                    <circle cx="54.5" cy="44.5" r="4.5" fill="#7A5A00" />
+                    <circle cx="54.5" cy="44.5" r="3.3" fill="#D4AC0D" />
+                    <circle cx="53.2" cy="43.2" r="1" fill="rgba(255,255,255,.45)" />
+                    <circle cx="54.5" cy="50.5" r="1.5" fill="#3E2723" />
+                    <path d="M53.2,51.8 L55.8,51.8 L56.4,55.5 L52.6,55.5 Z" fill="#3E2723" />
+
+                    <rect class="dsb-when-open" x="55" y="0" width="5" height="88" fill="url(#dsbEdge)" />
+                </svg>
+            </div>
+
+            <p class="dsb-caption">Loading DoorSim <span class="dsb-pct"></span></p>
+        </div>
     </div>
     <div id="blazor-error-ui">
         An unhandled error has occurred.
