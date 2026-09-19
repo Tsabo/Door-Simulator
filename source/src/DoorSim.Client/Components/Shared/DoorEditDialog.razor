@@ -397,7 +397,20 @@
                                          Placeholder="@OsdpAdvancedDefaults.ReplyTimeoutMilliseconds.ToString()"
                                          HelperText="Inter-byte gap tolerated within one frame. Must be shorter than the connection timeout."
                                          Variant="Variant.Outlined"
-                                         Margin="Margin.Dense" />
+                                         Margin="Margin.Dense"
+                                         Class="mb-4" />
+
+                        <MudSelect T="OsdpLedColor?" @bind-Value="_form.OsdpDefaultLedColor"
+                                   Label="Default LED color"
+                                   HelperText="Idle color shown before the panel sends its first osdp_LED command — useful for panels (e.g. Verkada, Inner Range Integriti) that never send one."
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense">
+                            <MudSelectItem T="OsdpLedColor?" Value="@((OsdpLedColor?)null)">Off (simulator default)</MudSelectItem>
+                            @foreach (var color in Enum.GetValues<OsdpLedColor>())
+                            {
+                                <MudSelectItem T="OsdpLedColor?" Value="@((OsdpLedColor?)color)">@color</MudSelectItem>
+                            }
+                        </MudSelect>
                     </MudExpansionPanel>
 
                 </MudExpansionPanels>

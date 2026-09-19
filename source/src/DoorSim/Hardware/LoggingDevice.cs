@@ -38,8 +38,9 @@ internal sealed class LoggingDevice : Device
     private CancellationTokenSource _ledRevertCts = new();
 
     // Volatile reference ensures the latest state is visible across threads without locking.
-    // ReaderLedState is an immutable record so partial reads are impossible.
-    private volatile ReaderLedState _ledState = new(OsdpLedColor.Off, false, false);
+    // ReaderLedState is an immutable record so partial reads are impossible. Initial value is
+    // set in the constructor from the door's configured idle color (stock: Off).
+    private volatile ReaderLedState _ledState;
 
     // Mutated when an accepted osdp_COMSET changes the address, so a later pdCOMMSET reply
     // reports the address the PD will actually answer on.
@@ -65,6 +66,7 @@ internal sealed class LoggingDevice : Device
         _comsetBehavior = door.OsdpComsetHandling;
         _pdCapabilities = OsdpCapabilityMapper.BuildCapabilities(door);
         _identification = OsdpCapabilityMapper.BuildIdentification(door);
+        _ledState = new ReaderLedState(door.OsdpDefaultLedColor ?? OsdpLedColor.Off, false, false);
     }
 
     /// <summary>The last LED and buzzer state commanded by the panel.</summary>
@@ -109,7 +111,7 @@ internal sealed class LoggingDevice : Device
         var isTemp = led0 is
         {
             TemporaryMode: TemporaryReaderControlCode.SetTemporaryAndStartTimer,
-            TemporaryTimer: > 0
+            TemporaryTimer: > 0,
         };
 
         var tempVisibleBlink = ShouldVisiblyBlink(led0.TemporaryOnColor, led0.TemporaryOffColor, led0.TemporaryOffTime);
@@ -243,7 +245,7 @@ internal sealed class LoggingDevice : Device
                 : InputStatusValue.Inactive, // DPS
             _getRexActive()
                 ? InputStatusValue.Active
-                : InputStatusValue.Inactive // REX
+                : InputStatusValue.Inactive, // REX
         ]);
     }
 
@@ -316,6 +318,6 @@ internal sealed class LoggingDevice : Device
         LedColor.Magenta => OsdpLedColor.Magenta,
         LedColor.Cyan => OsdpLedColor.Cyan,
         LedColor.White => OsdpLedColor.White,
-        _ => OsdpLedColor.Off // Black / None
+        var _ => OsdpLedColor.Off, // Black / None
     };
 }

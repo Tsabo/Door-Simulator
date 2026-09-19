@@ -65,6 +65,7 @@ public partial class DoorEditDialog
                 OsdpComsetHandling = door.OsdpComsetHandling,
                 OsdpConnectionTimeoutSeconds = door.OsdpConnectionTimeoutSeconds,
                 OsdpReplyTimeoutMilliseconds = door.OsdpReplyTimeoutMilliseconds,
+                OsdpDefaultLedColor = door.OsdpDefaultLedColor,
                 HasDps = door.DpsPin.HasValue || door.DpsModbusChannel.HasValue,
                 DpsPin = door.DpsPin,
                 DpsModeIsModbus = door.DpsModbusChannel.HasValue,
@@ -79,7 +80,7 @@ public partial class DoorEditDialog
                 ModbusSerialPort = door.ModbusSerialPort,
                 ModbusTcpHost = door.ModbusTcpHost,
                 ModbusTcpPort = door.ModbusTcpPort,
-                ModbusUnitId = door.ModbusUnitId
+                ModbusUnitId = door.ModbusUnitId,
             };
         }
 
@@ -194,7 +195,7 @@ public partial class DoorEditDialog
                 // is disabled in that state — clear it rather than sending a rejected pair.
                 OsdpCapDeclareDefaultAesKey: osdp && _form is
                 {
-                    OsdpCapDeclareAes128: true, OsdpCapDeclareDefaultAesKey: true
+                    OsdpCapDeclareAes128: true, OsdpCapDeclareDefaultAesKey: true,
                 },
                 OsdpCapReceiveBufferSize: osdp
                     ? _form.OsdpCapReceiveBufferSize
@@ -237,6 +238,9 @@ public partial class DoorEditDialog
                     : null,
                 OsdpReplyTimeoutMilliseconds: osdp
                     ? _form.OsdpReplyTimeoutMilliseconds
+                    : null,
+                OsdpDefaultLedColor: osdp
+                    ? _form.OsdpDefaultLedColor
                     : null);
 
             if (Editing is null)
@@ -288,7 +292,7 @@ public partial class DoorEditDialog
     /// the default row names the level the simulator will actually declare.
     /// </summary>
     private static string DefaultLevelLabel(OsdpCapabilityLevel[] levels, byte stockValue) =>
-        levels.FirstOrDefault(l => l.Value == stockValue).Label ?? stockValue.ToString();
+        levels.FirstOrDefault(p => p.Value == stockValue).Label ?? stockValue.ToString();
 
     private Task OnHasDpsChanged(bool value)
     {
@@ -425,6 +429,8 @@ public partial class DoorEditDialog
         public int? OsdpConnectionTimeoutSeconds { get; set; }
 
         public int? OsdpReplyTimeoutMilliseconds { get; set; }
+
+        public OsdpLedColor? OsdpDefaultLedColor { get; set; }
 
         public bool HasDps { get; set; }
 

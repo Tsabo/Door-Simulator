@@ -100,6 +100,10 @@ public class DoorConfigEntity
 
     public int? OsdpReplyTimeoutMilliseconds { get; set; }
 
+    // Stored as a string for the same readability reason as OsdpComsetHandling above. Null
+    // must resolve to the simulator's stock idle color (Off).
+    public string? OsdpDefaultLedColor { get; set; }
+
     // Named arguments throughout: DoorConfiguration is a wide positional record, and two
     // transposed same-typed arguments would compile silently and mis-assign both fields.
     public DoorConfiguration ToDto() => new(
@@ -152,7 +156,10 @@ public class DoorConfigEntity
             ? comset
             : OsdpComsetBehavior.Ignore,
         OsdpConnectionTimeoutSeconds,
-        OsdpReplyTimeoutMilliseconds);
+        OsdpReplyTimeoutMilliseconds,
+        Enum.TryParse<OsdpLedColor>(OsdpDefaultLedColor, true, out var ledColor)
+            ? ledColor
+            : null);
 
     public static DoorConfigEntity FromDto(DoorConfiguration dto)
     {
@@ -217,5 +224,6 @@ public class DoorConfigEntity
         OsdpComsetHandling = dto.OsdpComsetHandling.ToString();
         OsdpConnectionTimeoutSeconds = dto.OsdpConnectionTimeoutSeconds;
         OsdpReplyTimeoutMilliseconds = dto.OsdpReplyTimeoutMilliseconds;
+        OsdpDefaultLedColor = dto.OsdpDefaultLedColor?.ToString();
     }
 }

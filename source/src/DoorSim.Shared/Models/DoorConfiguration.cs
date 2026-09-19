@@ -18,17 +18,20 @@ namespace DoorSim.Shared.Models;
 /// default (Ack) automatically, with no backfill needed.
 /// </summary>
 /// <remarks>
-/// The <c>OsdpCap*</c>, <c>OsdpId*</c>, <c>OsdpComsetHandling</c> and <c>Osdp*Timeout*</c>
-/// members are the advanced OSDP settings, and they all share one rule:
-/// <b>null means the simulator's stock behaviour.</b> For the capabilities the simulator
+/// The <c>OsdpCap*</c>, <c>OsdpId*</c>, <c>OsdpComsetHandling</c>, <c>Osdp*Timeout*</c> and
+/// <c>OsdpDefaultLedColor</c> members are the advanced OSDP settings, and they all share one
+/// rule: <b>null means the simulator's stock behaviour.</b> For the capabilities the simulator
 /// already advertises — CardDataFormat, ReaderLEDControl, CheckCharacterSupport and
 /// CommunicationSecurity — stock means "advertised at the value in
 /// <see cref="OsdpAdvancedDefaults" />". For every other capability, stock means "absent from
 /// the osdp_CAP reply entirely". A non-null value always means "declare exactly this".
 /// <para>
-/// These settings change only what the PD <i>declares</i> to the panel; they do not change
-/// what the simulator actually does. Declaring a capability the simulator does not implement
-/// is a deliberate negative-test tool.
+/// The <c>OsdpCap*</c> and <c>OsdpId*</c> settings change only what the PD <i>declares</i> to
+/// the panel; they do not change what the simulator actually does. Declaring a capability the
+/// simulator does not implement is a deliberate negative-test tool.
+/// <c>OsdpComsetHandling</c> and <c>OsdpDefaultLedColor</c> are the exceptions — they change
+/// actual simulator behaviour (the osdp_COMSET reply, and the reader's idle LED color before
+/// any osdp_LED command arrives, respectively), not just what's declared.
 /// </para>
 /// <para>
 /// Like <c>OsdpNakManufacturerCommand</c>, the two bool flags are named for their non-default
@@ -87,4 +90,10 @@ public record DoorConfiguration(
     // --- Advanced OSDP: protocol behaviour and timing ---
     OsdpComsetBehavior OsdpComsetHandling = OsdpComsetBehavior.Ignore,
     int? OsdpConnectionTimeoutSeconds = null,
-    int? OsdpReplyTimeoutMilliseconds = null);
+    int? OsdpReplyTimeoutMilliseconds = null,
+
+    // Idle LED color shown before the panel sends its first osdp_LED command (and after any
+    // reset with no color set). Null means stock behaviour — Off, i.e. today's hardcoded
+    // startup state. Useful for panels that never send osdp_LED at all (e.g. Verkada, Inner
+    // Range Integriti), so the mock reader can still show a realistic idle color.
+    OsdpLedColor? OsdpDefaultLedColor = null);
