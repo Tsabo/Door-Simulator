@@ -1,0 +1,46 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup Label="ASP.NET Core / Web">
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <!-- Pinned above the transitive 2.0.0 pulled in by Microsoft.AspNetCore.OpenApi 10.0.0,
+         which has a known high-severity vulnerability (GHSA-v5pm-xwqc-g5wc, stack overflow on
+         circular schema refs) fixed in 2.7.5. -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.0" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.5" />
+  </ItemGroup>
+
+  <ItemGroup Label="Data / EF Core">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+    <PackageVersion Include="Tsabo.Data.Schema.EntityFrameworkCore" Version="1.0.0-beta.7" />
+    <PackageVersion Include="Tsabo.Data.Schema.Sqlite" Version="1.0.0-beta.7" />
+  </ItemGroup>
+
+  <ItemGroup Label="Logging">
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Seq" Version="9.1.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="UI">
+    <PackageVersion Include="MudBlazor" Version="9.10.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Hardware / IO">
+    <PackageVersion Include="FluentModbus" Version="5.3.2" />
+    <PackageVersion Include="System.Device.Gpio" Version="4.2.0" />
+    <PackageVersion Include="System.IO.Ports" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup Label="Testing">
+    <PackageVersion Include="TUnit" Version="1.68.17" />
+  </ItemGroup>
+
+</Project>

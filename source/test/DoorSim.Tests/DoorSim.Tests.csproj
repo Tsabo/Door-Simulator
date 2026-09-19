@@ -7,12 +7,12 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Label="Package References">
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="TUnit" Version="1.30.0" />
+    <PackageReference Include="TUnit" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Label="Project References">
     <ProjectReference Include="..\..\src\DoorSim\DoorSim.csproj" />
   </ItemGroup>
 
