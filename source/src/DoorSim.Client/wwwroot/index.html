@@ -10,13 +10,13 @@
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
 
-    <!--
+     <!--
         DoorSim boot animation.
 
-        Inlined on purpose: it paints on the first frame, before app.css and
-        MudBlazor.min.css have landed, and it leaves with the rest of #app the
-        moment Blazor renders the root component. Move it to css/app.css if you
-        would rather keep index.html thin.
+        Kept inline so the loader is self-contained: its markup and styles live
+        together, and it goes away with the rest of #app the moment Blazor
+        renders the root component. Move the styles to css/app.css if you'd
+        rather keep index.html thin.
 
         Everything is driven by the two custom properties Blazor publishes on
         <html> while boot resources download:
@@ -24,11 +24,15 @@
             --blazor-load-percentage        e.g. 42%
             --blazor-load-percentage-text   e.g. "42%"
 
-        0% = door wide open   ·   100% = door shut and secured
+        Direction is set by data-door on the .dsb element:
+
+            data-door="opens"    (default) shut at 0%, wide open at 100%
+            data-door="closes"   wide open at 0%, shut and secured at 100%
     -->
     <style>
         .dsb {
-            --dsb-p: var(--blazor-load-percentage, 0%);
+            /* How shut the door is. Default: the door opens as the app loads. */
+            --dsb-shut: calc(100% - var(--blazor-load-percentage, 0%));
             --dsb-ease: cubic-bezier(.22,.75,.28,1);
             position: fixed;
             inset: 0;
@@ -40,6 +44,11 @@
             padding: 2rem 1rem;
             font-family: Roboto, "Segoe UI", system-ui, sans-serif;
             color: #191e25;
+        }
+
+        /* data-door="closes": the door shuts as the app loads instead */
+        .dsb[data-door="closes"] {
+            --dsb-shut: var(--blazor-load-percentage, 0%);
         }
 
         .dsb-door {
@@ -56,8 +65,8 @@
             display: block;
         }
 
-        /*  The swinging leaf. Hinged on its left stile, it closes as the
-            percentage climbs. `scale` accepts a percentage, so the variable
+        /*  The swinging leaf. Hinged on its left stile, it opens as the
+            percentage climbs. `scale` accepts a percentage, so the value
             drops straight in unconverted; the clip-path taper foreshortens the
             free edge so the leaf reads as swinging away rather than squashing.  */
         .dsb-door__panel {
@@ -67,22 +76,22 @@
             width: 75%;       /* 60 / 80  */
             height: 78.571%;  /* 88 / 112 */
             display: block;
-            --dsb-taper: calc(4.5% - var(--dsb-p) * .045);
+            --dsb-taper: calc(4.5% - var(--dsb-shut) * .045);
             transform-origin: left center;
-            scale: var(--dsb-p) 100%;
+            scale: var(--dsb-shut) 100%;
             clip-path: polygon(0% 0%, 100% var(--dsb-taper), 100% calc(100% - var(--dsb-taper)), 0% 100%);
             transition: scale .5s var(--dsb-ease), clip-path .5s var(--dsb-ease);
         }
 
-        /*  Open-state details fade out as the door shuts, and vice versa.
+        /*  Open-state details fade in as the door opens, and vice versa.
             `opacity` takes a percentage too, so no conversion is needed.  */
         .dsb-when-open {
-            opacity: calc(100% - var(--dsb-p));
+            opacity: calc(100% - var(--dsb-shut));
             transition: opacity .5s var(--dsb-ease);
         }
 
         .dsb-when-shut {
-            opacity: var(--dsb-p);
+            opacity: var(--dsb-shut);
             transition: opacity .5s var(--dsb-ease);
         }
 
@@ -118,7 +127,7 @@
 </head>
 <body>
     <div id="app">
-        <div class="dsb" role="status" aria-label="Loading DoorSim">
+        <div class="dsb" data-door="opens" role="status" aria-label="Loading DoorSim">
             <div class="dsb-door">
                 <svg class="dsb-door__frame" viewBox="0 0 80 112" aria-hidden="true">
                     <defs>
