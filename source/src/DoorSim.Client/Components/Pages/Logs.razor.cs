@@ -7,14 +7,14 @@ public partial class Logs : IDisposable
     private const int MaxDisplayLines = 500;
 
     private readonly CancellationTokenSource _cts = new();
-    private readonly List<LogLine> _lines = [];
+    private readonly List<LogLineView> _lines = [];
     private bool _autoScroll = true;
     private ElementReference _consoleRef;
-    private LogSeverity _minLevel = LogSeverity.Verbose;
-    private string _filterText = "";
     private bool _excludeMode;
+    private string _filterText = "";
+    private LogSeverity _minLevel = LogSeverity.Verbose;
 
-    private List<LogLine> FilteredLines => [.. _lines.Where(MatchesFilter)];
+    private List<LogLineView> FilteredLines => [.. _lines.Where(MatchesFilter)];
 
     public void Dispose()
     {
@@ -34,7 +34,7 @@ public partial class Logs : IDisposable
         {
             await foreach (var line in LogsClient.SubscribeAsync(_cts.Token))
             {
-                _lines.Add(line);
+                _lines.Add(LogLineView.Create(line));
                 if (_lines.Count > MaxDisplayLines)
                     _lines.RemoveAt(0);
 
@@ -62,18 +62,21 @@ public partial class Logs : IDisposable
 
     private void OnExcludeModeChanged(bool value) => _excludeMode = value;
 
-    private bool MatchesFilter(LogLine line)
+    private bool MatchesFilter(LogLineView view)
     {
-        if (line.Level < _minLevel)
+        if (view.Line.Level < _minLevel)
             return false;
 
         if (string.IsNullOrWhiteSpace(_filterText))
             return true;
 
-        var matches = line.Message.Contains(_filterText, StringComparison.OrdinalIgnoreCase)
-                      || (line.SourceContext?.Contains(_filterText, StringComparison.OrdinalIgnoreCase) ?? false);
+        var matches = view.Line.Message.Contains(_filterText, StringComparison.OrdinalIgnoreCase)
+                      || (view.Line.SourceContext?.Contains(_filterText, StringComparison.OrdinalIgnoreCase) ?? false)
+                      || (view.RawPayload?.Contains(_filterText, StringComparison.OrdinalIgnoreCase) ?? false);
 
-        return _excludeMode ? !matches : matches;
+        return _excludeMode
+            ? !matches
+            : matches;
     }
 
     private async Task ScrollToBottomAsync()
@@ -94,5 +97,7 @@ public partial class Logs : IDisposable
         level.ToString().ToUpperInvariant()[..Math.Min(3, level.ToString().Length)];
 
     private static string ShortSource(string sourceContext) =>
-        sourceContext.Contains('.') ? sourceContext[(sourceContext.LastIndexOf('.') + 1)..] : sourceContext;
+        sourceContext.Contains('.')
+            ? sourceContext[(sourceContext.LastIndexOf('.') + 1)..]
+            : sourceContext;
 }

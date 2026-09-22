@@ -62,3 +62,32 @@
 .log-line.fatal .log-level {
     color: #f14c4c;
 }
+
+.log-formatted {
+    margin: 2px 0 6px 0;
+    padding: 6px 8px;
+    background: #131313;
+    border-left: 2px solid #333;
+    white-space: pre-wrap;
+    font-family: inherit;
+    color: #d4d4d4;
+}
+
+/*
+    ::deep unscopes these selectors. Blazor's CSS isolation only rewrites elements the compiler
+    sees in this component's markup (adding a generated attribute it also appends to these
+    selectors); the <span> tokens below come from raw HTML in a MarkupString, so the compiler
+    never sees them and the scoped attribute is never applied — without ::deep these rules
+    would silently never match anything.
+*/
+/*
+    Deliberately NOT reusing the log-level palette (#569cd6/#4ec9b0/#dcdcaa/#6a9955/#6a6a6a above)
+    — highlighted tokens need to read as visually distinct from level indicators, not blend in.
+*/
+::deep .sql-kw { color: #c586c0; }
+::deep .sql-ident, ::deep .json-key, ::deep .kv-key { color: #9cdcfe; }
+::deep .sql-str, ::deep .json-str, ::deep .kv-val { color: #ce9178; }
+::deep .sql-num, ::deep .json-num { color: #b5cea8; }
+::deep .json-bool { color: #4fc1ff; }
+::deep .sql-comment { color: #7f848e; font-style: italic; }
+::deep .sql-punct, ::deep .json-punct { color: #d4d4d4; }

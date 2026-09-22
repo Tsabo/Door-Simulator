@@ -31,19 +31,26 @@
 </div>
 
 <div class="log-console" @ref="_consoleRef">
-    @foreach (var line in FilteredLines)
+    @foreach (var view in FilteredLines)
     {
-        <div class="log-line @LevelClass(line.Level)">
-            <span class="log-ts">@line.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")</span>
-            <span class="log-level">[@LevelAbbreviation(line.Level)]</span>
-            @if (!string.IsNullOrEmpty(line.SourceContext))
+        <div class="log-line @LevelClass(view.Line.Level)">
+            <span class="log-ts">@view.Line.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")</span>
+            <span class="log-level">[@LevelAbbreviation(view.Line.Level)]</span>
+            @if (!string.IsNullOrEmpty(view.Line.SourceContext))
             {
-                <span class="log-source">@ShortSource(line.SourceContext)</span>
+                <span class="log-source">@ShortSource(view.Line.SourceContext)</span>
             }
-            <span class="log-message">@line.Message</span>
-            @if (line.Exception is not null)
+            @if (!string.IsNullOrEmpty(view.Summary))
             {
-                <pre class="log-exception">@line.Exception</pre>
+                <span class="log-message">@view.SummaryHtml</span>
+            }
+            @if (view.Highlighted is { } highlighted)
+            {
+                <pre class="log-formatted @(view.Kind == LogPayloadKind.Sql ? "log-sql" : "log-json")">@highlighted</pre>
+            }
+            @if (view.Line.Exception is not null)
+            {
+                <pre class="log-exception">@view.Line.Exception</pre>
             }
         </div>
     }
