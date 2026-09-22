@@ -1,8 +1,11 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using DoorSim.Endpoints;
 using DoorSim.OpenApi;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.OpenApi;
+using ModelContextProtocol.Protocol;
 using Scalar.AspNetCore;
 using Serilog;
 
@@ -109,6 +112,25 @@ builder.Services.AddScoped<DoorConfigService>();
 
 builder.Services.AddProblemDetails();
 
+// MCP server — tools live in DoorSim.Mcp and call the same DI-registered services
+// (SimulationOrchestrator, CardLibraryService, etc.) that the /api/* endpoints above use, so an
+// LLM client can drive the exact same simulator through a single in-process host. Shares the
+// enum-as-string convention ConfigureHttpJsonOptions sets for the REST API below, since the MCP
+// SDK's tool schema/serialization pipeline is configured separately and doesn't inherit it.
+var mcpJsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+{
+    TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
+};
+
+mcpJsonOptions.Converters.Add(new JsonStringEnumConverter());
+
+builder.Services.AddMcpServer(options =>
+    {
+        options.ServerInfo = new Implementation { Name = "doorsim", Version = "1.0.0" };
+    })
+    .WithHttpTransport()
+    .WithToolsFromAssembly(serializerOptions: mcpJsonOptions);
+
 // Enums serialize as their string name (e.g. "Wiegand26") rather than the default integer —
 // self-explanatory on the wire and in the generated OpenAPI schema. Keep in sync with the
 // Blazor client, which uses the matching DoorSimJson.Options for the same reason.
@@ -125,7 +147,7 @@ builder.Services.AddOpenApi(options =>
             Title = "DoorSim API",
             Version = "v1",
             Description = "Access-control reader/door simulator API — "
-                          + "card library, door configuration, and simulation control."
+                          + "card library, door configuration, and simulation control.",
         };
 
         return Task.CompletedTask;
@@ -195,6 +217,9 @@ app.MapSimulationEndpoints();
 app.MapSettingsEndpoints();
 app.MapMetricsEndpoints();
 app.MapLogsEndpoints();
+
+// MCP server — same DI services as the endpoints above, exposed as tools for LLM clients.
+app.MapMcp("/mcp");
 
 // API documentation — always available, not gated to Development.
 // ScalarOptions.ProxyUrl defaults to null (no proxy), which is what we want for
