@@ -2,8 +2,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using DoorSim.Endpoints;
+using DoorSim.Hosting;
 using DoorSim.OpenApi;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Configuration.Json;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi;
 using ModelContextProtocol.Protocol;
 using Scalar.AspNetCore;
@@ -22,14 +25,55 @@ TaskScheduler.UnobservedTaskException += (_, args) =>
     args.SetObserved();
 };
 
-var builder = WebApplication.CreateBuilder(args);
+// A packaged build may be launched from any directory (e.g. ~/Downloads/doorsim/DoorSim), and the
+// default content root is the working directory. Anchor it to the install folder so appsettings.json
+// and wwwroot are found, unless the working directory is itself a project folder (dotnet run).
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json"))
+        ? null
+        : AppContext.BaseDirectory,
+});
+
+// Package installs (.deb) keep host-specific settings in /etc/doorsim/appsettings.json so upgrades
+// never overwrite them. Slotted in right after the bundled appsettings*.json files, so environment
+// variables and the command line still override it.
+const string etcConfigDirectory = "/etc/doorsim";
+
+if (OperatingSystem.IsLinux() && Directory.Exists(etcConfigDirectory))
+{
+    var sources = builder.Configuration.Sources;
+    var insertAt = 0;
+
+    for (var i = 0; i < sources.Count; i++)
+    {
+        if (sources[i] is JsonConfigurationSource)
+            insertAt = i + 1;
+    }
+
+    sources.Insert(insertAt, new JsonConfigurationSource
+    {
+        Path = "appsettings.json",
+        FileProvider = new PhysicalFileProvider(etcConfigDirectory),
+        Optional = true,
+        ReloadOnChange = false,
+    });
+}
+
+// Database and log files live under one platform-appropriate root (see DataPaths).
+var dataDirectory = DataPaths.EnsureRoot(builder.Configuration);
 
 // LogEventBus is constructed here, before UseSerilog, because Serilog sinks are built inside
 // the UseSerilog configuration lambda — which runs before builder.Build(), i.e. before the DI
 // container exists. The same instance is registered into DI below so LogsEndpoints can inject it.
 var logBus = new LogEventBus();
 var logDirectory = builder.Configuration["Logs:Directory"]
-                   ?? Path.Combine(builder.Environment.ContentRootPath, "logs");
+                   ?? Path.Combine(dataDirectory, "logs");
+
+// Publish the resolved directory back into configuration so LogsEndpoints' /download reads the
+// same place the file sink writes to, even when it came from the DataPaths default.
+builder.Configuration.AddInMemoryCollection([new KeyValuePair<string, string?>("Logs:Directory", logDirectory)]);
 
 builder.Host.UseSerilog((ctx, lc) =>
 {
@@ -89,6 +133,11 @@ builder.Services.AddSingleton<GpioController?>(sp =>
     }
 });
 
+// Derived from the GPIO probe above so Wiegand / GPIO-contact features can be rejected up front
+// on hosts without GPIO rather than silently doing nothing.
+builder.Services.AddSingleton(sp => new HostCapabilities(
+    sp.GetService<GpioController?>() is not null));
+
 builder.Services.AddSingleton<ModbusRelayService>();
 builder.Services.AddSingleton<ModbusTcpRelayService>();
 builder.Services.AddSingleton<SimulationSettingsService>();
@@ -104,7 +153,7 @@ builder.Services.AddSingleton(logBus);
 // Data
 builder.Services.AddDbContext<DoorSimDbContext>(opt =>
     opt.UseSqlite(builder.Configuration.GetConnectionString("DoorSim")
-                  ?? "Data Source=doorsim.db"));
+                  ?? $"Data Source={Path.Combine(dataDirectory, "cards.db")}"));
 
 builder.Services.AddScoped<CardLibraryService>();
 builder.Services.AddScoped<CardFormatService>();
@@ -126,7 +175,7 @@ mcpJsonOptions.Converters.Add(new JsonStringEnumConverter());
 
 builder.Services.AddMcpServer(options =>
     {
-        options.ServerInfo = new Implementation { Name = "doorsim", Version = "1.0.0" };
+        options.ServerInfo = new Implementation { Name = "doorsim", Version = AppVersion.Display };
     })
     .WithHttpTransport()
     .WithToolsFromAssembly(serializerOptions: mcpJsonOptions);
@@ -217,6 +266,7 @@ app.MapSimulationEndpoints();
 app.MapSettingsEndpoints();
 app.MapMetricsEndpoints();
 app.MapLogsEndpoints();
+app.MapSystemEndpoints();
 
 // MCP server — same DI services as the endpoints above, exposed as tools for LLM clients.
 app.MapMcp("/mcp");

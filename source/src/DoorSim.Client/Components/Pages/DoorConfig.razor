@@ -1,5 +1,6 @@
 @page "/doors"
 @inject DoorApiClient Doors
+@inject SystemApiClient SystemClient
 @inject IDialogService Dialog
 
 <PageTitle>Door Config — DoorSim</PageTitle>
@@ -52,6 +53,14 @@ else
                 <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">
                     @context.Protocol
                 </MudChip>
+                @if (!_gpioAvailable && context.Protocol == ProtocolType.Wiegand)
+                {
+                    <MudTooltip Text="Wiegand needs GPIO (Raspberry Pi), so this door is not running. Switch it to OSDP or delete it.">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning">
+                            Unavailable on this host
+                        </MudChip>
+                    </MudTooltip>
+                }
             </MudTd>
             <MudTd DataLabel="D0 / Port">@(context.Protocol == ProtocolType.Wiegand ? (context.D0Pin?.ToString() ?? "—") : (context.OsdpSerialPort ?? "—"))</MudTd>
             <MudTd DataLabel="D1 / OSDP Addr">

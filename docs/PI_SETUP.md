@@ -28,8 +28,42 @@ Example: `<pi-user>@<pi-host>`, app served at `http://<pi-host>:5000`.
 
 ---
 
+## Quick install from a release (.deb)
+
+For running a released version rather than developing on the Pi. After the base
+OS is up ([step 1](#1-base-os)), download `doorsim_<version>_arm64.deb` from the
+[Releases page](https://github.com/Tsabo/Door-Simulator/releases) and:
+
+```bash
+sudo apt install ./doorsim_<version>_arm64.deb
+systemctl status doorsim        # active (running)
+```
+
+The package is a self-contained build (no .NET install needed) and sets up:
+
+| What | Where |
+|------|-------|
+| App | `/opt/doorsim` |
+| Service | `doorsim.service`, running as the `doorsim` system user (added to `dialout` and `gpio`) |
+| Data (cards.db, logs) | `/var/lib/doorsim` — kept on uninstall |
+| Your settings | `/etc/doorsim/appsettings.json` — preserved across upgrades |
+| udev rules | `/usr/lib/udev/rules.d/99-waveshare485.rules` |
+
+Upgrade by installing a newer `.deb` the same way. The UART/Bluetooth boot
+changes are **not** made by the package. If you need the GPIO UARTs, run
+`sudo /usr/share/doorsim/setup-pi.sh` once and reboot.
+
+> Switching an existing `deploy-to-pi.ps1` host to the package: remove
+> `/etc/systemd/system/doorsim.service` first — a unit there overrides the
+> packaged one. The existing `/var/lib/doorsim/cards.db` is picked up as-is.
+
+Then continue at [step 4](#4-wire-and-verify-the-rs-485-adapters).
+
+---
+
 ## Part 1 — New host, from a fresh Raspberry Pi OS install
 
+The developer path: build from source and deploy with `deploy-to-pi.ps1`.
 Tested on Raspberry Pi OS Bookworm 64-bit, Pi 4.
 
 ### 1. Base OS
@@ -54,8 +88,9 @@ chmod +x dotnet-install.sh
 ~/.dotnet/dotnet --list-runtimes    # expect Microsoft.AspNetCore.App 10.x
 ```
 
-> Do **not** use a self-contained publish. It produces musl/glibc mismatches on
-> Raspberry Pi OS.
+> Keep `deploy-to-pi.ps1` framework-dependent. A self-contained publish has
+> produced musl/glibc mismatches on Raspberry Pi OS. (The release `.deb` is
+> self-contained but explicitly targets the glibc `linux-arm64` runtime.)
 
 ### 3. Run the OS setup script
 

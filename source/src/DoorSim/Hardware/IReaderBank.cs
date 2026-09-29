@@ -25,4 +25,10 @@ public interface IReaderBank
     /// Returns true if the simulator for the given door ID exists in the active bank.
     /// </summary>
     bool ContainsReader(int doorId);
+
+    /// <summary>
+    /// Why a configured door has no active simulator on this host (e.g. a Wiegand door without GPIO),
+    /// or null when the door is active or simply unknown.
+    /// </summary>
+    string? GetUnavailableReason(int doorId) => null;
 }

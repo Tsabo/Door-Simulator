@@ -1,0 +1,31 @@
+[Unit]
+Description=DoorSim access-control reader/door simulator
+Documentation=https://github.com/Tsabo/Door-Simulator
+# udevd must be up before ExecStartPre can meaningfully wait on it.
+After=network-online.target systemd-udevd.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=doorsim
+Group=doorsim
+WorkingDirectory=/opt/doorsim
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOORSIM_DATA_DIR=/var/lib/doorsim
+# Creates /var/lib/doorsim (cards.db, logs/) owned by the doorsim user.
+StateDirectory=doorsim
+
+# Wait for udev to create /dev/ttyRS485_* before the app opens ports by name (see
+# wait-for-rs485.sh). Leading "-" so a missing or failing gate never blocks startup.
+ExecStartPre=-/bin/sh /opt/doorsim/wait-for-rs485.sh
+
+# Self-contained build: no system-wide .NET runtime required.
+ExecStart=/opt/doorsim/DoorSim
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGINT
+# ExecStartPre can legitimately consume up to ~60s (settle + poll).
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target

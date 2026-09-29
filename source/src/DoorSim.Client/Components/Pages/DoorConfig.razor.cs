@@ -7,13 +7,14 @@ public partial class DoorConfig
 {
     private DoorConfiguration[] _doors = [];
     private string? _error;
+    private bool _gpioAvailable = true;
     private bool _loading = true;
 
     private static DialogOptions DialogOptions => new()
     {
         MaxWidth = MaxWidth.Medium,
         FullWidth = true,
-        CloseButton = true
+        CloseButton = true,
     };
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
@@ -23,6 +24,7 @@ public partial class DoorConfig
         _loading = true;
         try
         {
+            _gpioAvailable = await SystemClient.IsGpioAvailableAsync();
             _doors = await Doors.GetAllAsync();
         }
         catch (Exception ex)
@@ -39,7 +41,7 @@ public partial class DoorConfig
     {
         var parameters = new DialogParameters<DoorEditDialog>
         {
-            { p => p.Editing, null }
+            { p => p.Editing, null },
         };
 
         var dialogRef = await Dialog.ShowAsync<DoorEditDialog>("Add Door", parameters, DialogOptions);
@@ -52,7 +54,7 @@ public partial class DoorConfig
     {
         var parameters = new DialogParameters<DoorEditDialog>
         {
-            { p => p.Editing, door }
+            { p => p.Editing, door },
         };
 
         var dialogRef = await Dialog.ShowAsync<DoorEditDialog>($"Edit: {door.Label}", parameters, DialogOptions);

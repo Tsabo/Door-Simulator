@@ -1,5 +1,6 @@
 @page "/settings"
 @inject SettingsApiClient SettingsClient
+@inject SystemApiClient SystemClient
 
 <PageTitle>Settings — DoorSim</PageTitle>
 
@@ -104,6 +105,57 @@ else
                         @(_saving ? "Saving…" : "Save")
                     </MudButton>
                 </MudCardActions>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Host</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Tertiary">
+                            The machine running the DoorSim server.
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+
+                <MudCardContent>
+                    @if (_systemInfo is null)
+                    {
+                        <MudText Typo="Typo.body2">Host details unavailable.</MudText>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true" Elevation="0">
+                            <tbody>
+                                <tr><td>Version</td><td>@_systemInfo.Version</td></tr>
+                                <tr><td>Operating system</td><td>@_systemInfo.OperatingSystem</td></tr>
+                                <tr><td>Architecture</td><td>@_systemInfo.Architecture</td></tr>
+                                <tr>
+                                    <td>GPIO</td>
+                                    <td>
+                                        @if (_systemInfo.GpioAvailable)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Success">Available</MudChip>
+                                        }
+                                        else
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning">Unavailable</MudChip>
+                                        }
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </MudSimpleTable>
+
+                        @if (!_systemInfo.GpioAvailable)
+                        {
+                            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-4">
+                                Wiegand doors and GPIO door contacts need a Raspberry Pi. On this host, use OSDP
+                                for card reads and a Modbus relay board for DPS/REX.
+                            </MudAlert>
+                        }
+                    }
+                </MudCardContent>
             </MudCard>
         </MudItem>
     </MudGrid>

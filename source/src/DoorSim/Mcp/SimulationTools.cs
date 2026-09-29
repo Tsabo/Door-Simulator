@@ -34,8 +34,7 @@ internal static class SimulationTools
         if (validationError is not null)
             throw new McpException(validationError);
 
-        if (!bank.ContainsReader(request.ReaderId))
-            throw new McpException($"Reader {request.ReaderId} not found in the active bank.");
+        EnsureReader(bank, request.ReaderId);
 
         if (request.EventType != DoorEventType.EgressCycle)
         {
@@ -75,8 +74,7 @@ internal static class SimulationTools
         if (validationError is not null)
             throw new McpException(validationError);
 
-        if (!bank.ContainsReader(request.ReaderId))
-            throw new McpException($"Reader {request.ReaderId} not found in the active bank.");
+        EnsureReader(bank, request.ReaderId);
 
         if (request.Format == WiegandFormat.Custom)
         {
@@ -108,8 +106,7 @@ internal static class SimulationTools
         if (validationError is not null)
             throw new McpException(validationError);
 
-        if (!bank.ContainsReader(request.ReaderId))
-            throw new McpException($"Reader {request.ReaderId} not found in the active bank.");
+        EnsureReader(bank, request.ReaderId);
 
         await orchestrator.SendBitsAsync(request);
 
@@ -130,8 +127,7 @@ internal static class SimulationTools
         if (validationError is not null)
             throw new McpException(validationError);
 
-        if (!bank.ContainsReader(request.ReaderId))
-            throw new McpException($"Reader {request.ReaderId} not found in the active bank.");
+        EnsureReader(bank, request.ReaderId);
 
         if (request.EventType != DoorEventType.EgressCycle && request.Format == WiegandFormat.Custom)
         {
@@ -157,8 +153,7 @@ internal static class SimulationTools
         SimulationOrchestrator orchestrator,
         IReaderBank bank)
     {
-        if (!bank.ContainsReader(readerId))
-            throw new McpException($"Reader {readerId} not found in the active bank.");
+        EnsureReader(bank, readerId);
 
         await orchestrator.OpenDoorAsync(readerId);
 
@@ -173,8 +168,7 @@ internal static class SimulationTools
         SimulationOrchestrator orchestrator,
         IReaderBank bank)
     {
-        if (!bank.ContainsReader(readerId))
-            throw new McpException($"Reader {readerId} not found in the active bank.");
+        EnsureReader(bank, readerId);
 
         await orchestrator.CloseDoorAsync(readerId);
 
@@ -190,8 +184,7 @@ internal static class SimulationTools
         SimulationOrchestrator orchestrator,
         IReaderBank bank)
     {
-        if (!bank.ContainsReader(readerId))
-            throw new McpException($"Reader {readerId} not found in the active bank.");
+        EnsureReader(bank, readerId);
 
         await orchestrator.QuickRexAsync(readerId);
 
@@ -207,8 +200,7 @@ internal static class SimulationTools
         SimulationOrchestrator orchestrator,
         IReaderBank bank)
     {
-        if (!bank.ContainsReader(readerId))
-            throw new McpException($"Reader {readerId} not found in the active bank.");
+        EnsureReader(bank, readerId);
 
         return orchestrator.GetStatus(readerId);
     }
@@ -222,8 +214,7 @@ internal static class SimulationTools
         SimulationOrchestrator orchestrator,
         IReaderBank bank)
     {
-        if (!bank.ContainsReader(readerId))
-            throw new McpException($"Reader {readerId} not found in the active bank.");
+        EnsureReader(bank, readerId);
 
         return orchestrator.GetConnectivity(readerId);
     }
@@ -234,8 +225,7 @@ internal static class SimulationTools
         SimulationOrchestrator orchestrator,
         IReaderBank bank)
     {
-        if (!bank.ContainsReader(readerId))
-            throw new McpException($"Reader {readerId} not found in the active bank.");
+        EnsureReader(bank, readerId);
 
         return orchestrator.GetQueue(readerId);
     }
@@ -246,8 +236,7 @@ internal static class SimulationTools
         SimulationOrchestrator orchestrator,
         IReaderBank bank)
     {
-        if (!bank.ContainsReader(readerId))
-            throw new McpException($"Reader {readerId} not found in the active bank.");
+        EnsureReader(bank, readerId);
 
         var cleared = orchestrator.ClearQueue(readerId);
 
@@ -262,12 +251,21 @@ internal static class SimulationTools
         SimulationOrchestrator orchestrator,
         IReaderBank bank)
     {
-        if (!bank.ContainsReader(readerId))
-            throw new McpException($"Reader {readerId} not found in the active bank.");
+        EnsureReader(bank, readerId);
 
         if (!orchestrator.CancelQueueItem(readerId, itemId))
             throw new McpException($"Queue item {itemId} not found for reader {readerId}.");
 
         return $"Cancelled queue item {itemId} for reader {readerId}.";
+    }
+
+    /// <summary>Throws when the reader is unknown, or configured but unable to run on this host.</summary>
+    private static void EnsureReader(IReaderBank bank, int readerId)
+    {
+        if (bank.ContainsReader(readerId))
+            return;
+
+        throw new McpException(bank.GetUnavailableReason(readerId)
+                               ?? $"Reader {readerId} not found in the active bank.");
     }
 }

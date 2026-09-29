@@ -17,6 +17,7 @@ builder.Services.AddScoped<DoorApiClient>();
 builder.Services.AddScoped<SettingsApiClient>();
 builder.Services.AddScoped<MetricsApiClient>();
 builder.Services.AddScoped<LogsApiClient>();
+builder.Services.AddScoped<SystemApiClient>();
 
 builder.Services.AddMudServices();
 

@@ -23,6 +23,45 @@ triggers card reads and door lifecycle events per reader.
 - A REST API as the integration point for the web UI today, and for future
   clients (e.g. a desktop app) that want to drive the same simulator
 
+## Install
+
+Download from the [latest release](https://github.com/Tsabo/Door-Simulator/releases/latest),
+then open `http://localhost:5000` (or `http://<host>:5000`).
+
+| Platform | Package | Run |
+|----------|---------|-----|
+| Raspberry Pi (64-bit OS) | `doorsim_<version>_arm64.deb` | `sudo apt install ./doorsim_<version>_arm64.deb` — installs a systemd service; see [docs/PI_SETUP.md](docs/PI_SETUP.md#quick-install-from-a-release-deb) |
+| Debian / Ubuntu x64 | `doorsim_<version>_amd64.deb` | as above |
+| Windows x64 | `doorsim-<version>-win-x64.zip` | unzip, run `DoorSim.exe` |
+| macOS (Apple Silicon) | `doorsim-<version>-osx-arm64.tar.gz` | extract, `xattr -dr com.apple.quarantine doorsim-*` (the build isn't notarized), run `./DoorSim` |
+| Other Linux | `doorsim-<version>-linux-{x64,arm64}.tar.gz` | extract, run `./DoorSim` |
+| Docker | `ghcr.io/tsabo/doorsim` | `docker run -p 5000:5000 -v doorsim-data:/data ghcr.io/tsabo/doorsim` — see [docker-compose.example.yml](docker-compose.example.yml) for serial/GPIO passthrough (Wiegand in a container needs `/dev/gpiochip0`; on a Pi the `.deb` is simpler) |
+
+All packages are self-contained, so no .NET install is needed. The card
+library, door configuration and logs are kept in:
+
+| Platform | Location |
+|----------|----------|
+| Linux | `/var/lib/doorsim` (`~/.local/share/DoorSim` if that isn't writable) |
+| Windows | `%LOCALAPPDATA%\DoorSim` |
+| macOS | `~/Library/Application Support/DoorSim` |
+| Docker | the `/data` volume |
+
+To use a different location, set `DOORSIM_DATA_DIR` or the `DataDirectory` setting.
+
+**Hardware by platform.** OSDP over a USB→RS-485 adapter and Modbus relay
+boards work everywhere. Wiegand output and GPIO door contacts need a Raspberry
+Pi. On other hosts those options are disabled in the UI and rejected by the API
+and MCP tools. **Settings → Host** shows what the running server supports.
+
+### Releasing
+
+Push a `v<semver>` tag (e.g. `v1.2.0`, or `v1.2.0-rc1` for a prerelease).
+[release.yml](.github/workflows/release.yml) then tests, builds every package
+with [scripts/package.sh](scripts/package.sh), pushes the multi-arch image to
+GHCR, and publishes a GitHub Release with checksums. Run the workflow manually
+for a dry run that builds everything but publishes nothing.
+
 ## Advanced OSDP settings
 
 Each OSDP door has an **Advanced OSDP** tab in its edit dialog that controls the
@@ -79,7 +118,8 @@ the door configuration table.
   for the OSDP protocol implementation (see
   [source/src/OSDP.Net/NOTICE.md](source/src/OSDP.Net/NOTICE.md))
 - EF Core + SQLite for card library and door configuration persistence
-- Target runtime: `linux-arm64` (Raspberry Pi OS, 64-bit)
+- Primary target: `linux-arm64` (Raspberry Pi OS, 64-bit); also packaged for
+  Windows x64, macOS arm64, Linux x64 and Docker
 
 ## Hardware
 

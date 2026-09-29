@@ -7,9 +7,11 @@ public partial class Settings
     private bool _loading = true;
     private bool _saved;
     private bool _saving;
+    private SystemInfo? _systemInfo;
 
     protected override async Task OnInitializedAsync()
     {
+        var systemInfoTask = SystemClient.GetInfoAsync();
         var current = await SettingsClient.GetTimingAsync();
         _form = new TimingFormModel
         {
@@ -21,6 +23,7 @@ public partial class Settings
             QueueItemDelayMs = current.QueueItemDelayMs,
         };
 
+        _systemInfo = await systemInfoTask;
         _loading = false;
     }
 

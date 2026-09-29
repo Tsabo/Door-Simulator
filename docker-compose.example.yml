@@ -1,0 +1,42 @@
+# Example Compose file for running DoorSim from the published image.
+#
+#   docker compose -f docker-compose.example.yml up -d
+#
+# Then open http://<host>:5000. The card library, door configuration and logs persist in the
+# doorsim-data volume.
+
+services:
+  doorsim:
+    image: ghcr.io/tsabo/doorsim:latest
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - doorsim-data:/data
+    environment:
+      # Optional: ship logs to a Seq server.
+      # Seq__ServerUrl: http://seq:5341
+      TZ: Etc/UTC
+
+    # --- Hardware passthrough (Linux hosts only) -------------------------------------------
+    # OSDP readers over USB RS-485 adapters: pass each serial device through, and give the
+    # container's user access to it. Use the same path in the door's "Serial Port" setting.
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0
+    #   - /dev/ttyRS485_0_0:/dev/ttyRS485_0_0
+    # group_add:
+    #   - dialout
+    #
+    # Wiegand output and GPIO door contacts (Raspberry Pi only): pass the GPIO chip through.
+    # Without it the app reports GPIO unavailable and disables those features.
+    # For a Pi driving real Wiegand / RS-485 hardware the .deb package is the simpler install —
+    # no device passthrough, and udev + the RS-485 startup gate work as-is.
+    # Pi 5 on a kernel older than 6.6.45: the 40-pin header is /dev/gpiochip4, not gpiochip0.
+    # devices:
+    #   - /dev/gpiochip0:/dev/gpiochip0
+    # group_add:
+    #   - "993"   # the host's gpio group ID — look it up with: getent group gpio
+    #             # (a name won't work; the container has no "gpio" group)
+
+volumes:
+  doorsim-data:

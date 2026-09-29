@@ -58,7 +58,16 @@ jobs:
         working-directory: source
         run: dotnet test --solution DoorSim.slnx -c Release --no-build
 
+  # Packaging smoke test: catches release-only breakage (publish, archive, .deb, image) on every PR
+  # instead of at tag time. Nothing is uploaded or pushed.
   publish-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-arm64
+            deb: true
+          - rid: win-x64
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -66,5 +75,29 @@ jobs:
       - name: Set up build environment
         uses: ./.github/actions/setup-build-env
 
-      - name: Publish for linux-arm64 (build check only, no deploy)
-        run: dotnet publish source/src/DoorSim -c Release -r linux-arm64 --no-self-contained
+      - name: Install nfpm
+        if: matrix.deb
+        run: |
+          echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | sudo tee /etc/apt/sources.list.d/goreleaser.list
+          sudo apt-get update
+          sudo apt-get install -y nfpm
+
+      - name: Package ${{ matrix.rid }}
+        run: scripts/package.sh ${{ matrix.rid }} 0.0.0-ci ${{ matrix.deb && '--deb' || '' }}
+
+  docker-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build image (amd64, not pushed)
+        uses: docker/build-push-action@v7
+        with:
+          context: source
+          file: source/Dockerfile
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

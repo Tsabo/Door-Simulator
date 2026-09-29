@@ -1,4 +1,5 @@
 @inject DoorApiClient Doors
+@inject SystemApiClient SystemClient
 
 <MudDialog>
     <DialogContent>
@@ -19,14 +20,26 @@
                            Class="mb-4">
                     @foreach (var proto in Enum.GetValues<ProtocolType>())
                     {
-                        <MudSelectItem Value="@proto">@proto</MudSelectItem>
+                        var needsGpio = proto == ProtocolType.Wiegand && !_gpioAvailable;
+                        <MudSelectItem Value="@proto" Disabled="@needsGpio">
+                            @proto@(needsGpio ? $" — {GpioRequiredHint}" : "")
+                        </MudSelectItem>
                     }
                 </MudSelect>
 
                 @if (_form.Protocol == ProtocolType.Wiegand)
                 {
+                    @if (!_gpioAvailable)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">
+                            Wiegand needs GPIO, which this host doesn't have (@GpioRequiredHint).
+                            Switch this door to OSDP to use it here.
+                        </MudAlert>
+                    }
+
                     <MudNumericField T="int?" @bind-Value="_form.D0Pin"
                                      Label="D0 Pin (BCM)"
+                                     Disabled="@(!_gpioAvailable)"
                                      Min="0"
                                      Max="27"
                                      Placeholder="e.g. 4"
@@ -36,6 +49,7 @@
 
                     <MudNumericField T="int?" @bind-Value="_form.D1Pin"
                                      Label="D1 Pin (BCM)"
+                                     Disabled="@(!_gpioAvailable)"
                                      Min="0"
                                      Max="27"
                                      Placeholder="e.g. 27"
@@ -427,8 +441,8 @@
                     <MudRadioGroup T="bool" Value="@_form.DpsModeIsModbus"
                                    ValueChanged="OnDpsModeChanged"
                                    Class="mb-4">
-                        <MudRadio T="bool" Value="false" Color="Color.Primary" Class="mb-2">
-                            GPIO Pin
+                        <MudRadio T="bool" Value="false" Color="Color.Primary" Class="mb-2" Disabled="@(!_gpioAvailable)">
+                            GPIO Pin@(_gpioAvailable ? "" : $" — {GpioRequiredHint}")
                         </MudRadio>
                         <MudRadio T="bool" Value="true" Color="Color.Primary">
                             Modbus Relay
@@ -439,6 +453,8 @@
                     {
                         <MudNumericField T="int?" @bind-Value="_form.DpsPin"
                                          Label="DPS Pin (BCM)"
+                                         Disabled="@(!_gpioAvailable)"
+                                         HelperText="@(_gpioAvailable ? null : GpioRequiredHint)"
                                          Min="0"
                                          Max="27"
                                          Placeholder="e.g. 21"
@@ -475,8 +491,8 @@
                     <MudRadioGroup T="bool" Value="@_form.RexModeIsModbus"
                                    ValueChanged="OnRexModeChanged"
                                    Class="mb-4">
-                        <MudRadio T="bool" Value="false" Color="Color.Primary" Class="mb-2">
-                            GPIO Pin
+                        <MudRadio T="bool" Value="false" Color="Color.Primary" Class="mb-2" Disabled="@(!_gpioAvailable)">
+                            GPIO Pin@(_gpioAvailable ? "" : $" — {GpioRequiredHint}")
                         </MudRadio>
                         <MudRadio T="bool" Value="true" Color="Color.Primary">
                             Modbus Relay
@@ -487,6 +503,8 @@
                     {
                         <MudNumericField T="int?" @bind-Value="_form.RexPin"
                                          Label="REX Pin (BCM)"
+                                         Disabled="@(!_gpioAvailable)"
+                                         HelperText="@(_gpioAvailable ? null : GpioRequiredHint)"
                                          Min="0"
                                          Max="27"
                                          Placeholder="e.g. 13"

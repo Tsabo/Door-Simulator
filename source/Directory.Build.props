@@ -1,0 +1,15 @@
+<Project>
+
+  <!--
+  Shared product metadata for DoorSim's own projects. Release builds override the version from the
+  git tag (release.yml passes -p:Version=1.2.3); local builds report 0.0.0-dev. The SDK appends the
+  commit SHA to InformationalVersion (e.g. 1.2.3+7881449...), which AppVersion trims for display.
+
+  OSDP.Net is a vendored upstream copy and keeps its own identity (see its NOTICE.md).
+  -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' != 'OSDP.Net'">
+    <Version>0.0.0-dev</Version>
+    <Product>DoorSim</Product>
+  </PropertyGroup>
+
+</Project>

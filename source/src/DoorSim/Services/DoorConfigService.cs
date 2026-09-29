@@ -5,9 +5,13 @@ namespace DoorSim.Services;
 /// <summary>
 /// CRUD service for <see cref="DoorConfigEntity" />.
 /// Validates GPIO pin and Modbus channel uniqueness, and OSDP baud rate values.
+/// Rejects GPIO-dependent settings (Wiegand, GPIO DPS/REX pins) when <see cref="HostCapabilities" />
+/// reports no GPIO; <paramref name="capabilities" /> defaults to <see cref="HostCapabilities.Unrestricted" />.
 /// </summary>
-public class DoorConfigService(DoorSimDbContext db)
+public class DoorConfigService(DoorSimDbContext db, HostCapabilities? capabilities = null)
 {
+    private readonly HostCapabilities _capabilities = capabilities ?? HostCapabilities.Unrestricted;
+
     public async Task<DoorConfiguration[]> GetAllAsync() =>
         await db.Doors
             .OrderBy(p => p.Label)
@@ -37,7 +41,7 @@ public class DoorConfigService(DoorSimDbContext db)
         return
         [
             .. DiscoverSerialPorts()
-                .Where(port => !usedPorts.Contains(port))
+                .Where(port => !usedPorts.Contains(port)),
         ];
     }
 
@@ -109,7 +113,7 @@ public class DoorConfigService(DoorSimDbContext db)
         OsdpSerialPort = Sanitize(dto.OsdpSerialPort),
         ModbusSerialPort = Sanitize(dto.ModbusSerialPort),
         ModbusTcpHost = Sanitize(dto.ModbusTcpHost),
-        OsdpIdVendorCode = Sanitize(dto.OsdpIdVendorCode)
+        OsdpIdVendorCode = Sanitize(dto.OsdpIdVendorCode),
     };
 
     private static string? Sanitize(string? value) =>
@@ -122,6 +126,15 @@ public class DoorConfigService(DoorSimDbContext db)
 
         if (dto.Label.Length > 100)
             return "Door label cannot exceed 100 characters.";
+
+        if (!_capabilities.GpioAvailable)
+        {
+            if (dto.Protocol == ProtocolType.Wiegand)
+                return $"Wiegand doors cannot be used on this host. {HostCapabilities.GpioUnavailableMessage}";
+
+            if (dto.DpsPin is not null || dto.RexPin is not null)
+                return $"GPIO DPS/REX pins cannot be used on this host. {HostCapabilities.GpioUnavailableMessage}";
+        }
 
         if (dto.Protocol == ProtocolType.Wiegand)
         {
@@ -333,7 +346,7 @@ public class DoorConfigService(DoorSimDbContext db)
         if (dto.OsdpCapLargestCombinedMessageSize is not null && !IsLegalMessageSize(dto.OsdpCapLargestCombinedMessageSize.Value))
             return MessageSizeError("Largest combined message size");
 
-        if (!OsdpAdvancedDefaults.TryParseVendorCode(dto.OsdpIdVendorCode, out _))
+        if (!OsdpAdvancedDefaults.TryParseVendorCode(dto.OsdpIdVendorCode, out var _))
         {
             return $"Invalid OSDP vendor code '{dto.OsdpIdVendorCode}'. " +
                    $"Expected three hex bytes, for example {OsdpAdvancedDefaults.VendorCodeText}.";

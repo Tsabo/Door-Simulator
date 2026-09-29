@@ -18,6 +18,10 @@ public sealed class DynamicSimulatorBank : IReaderBank, IAsyncDisposable
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ConcurrentDictionary<int, IReaderSimulator> _simulators = new();
 
+    // Doors that exist in the database but cannot run on this host (e.g. Wiegand without GPIO,
+    // typically a database copied from a Pi), keyed by door ID with the reason reported to callers.
+    private readonly ConcurrentDictionary<int, string> _unavailable = new();
+
     public DynamicSimulatorBank(ILoggerFactory loggerFactory,
         IServiceScopeFactory scopeFactory,
         GpioController? gpio,
@@ -73,6 +77,12 @@ public sealed class DynamicSimulatorBank : IReaderBank, IAsyncDisposable
 
     /// <inheritdoc />
     public IReadOnlyCollection<int> ActiveDoorIds => [.. _simulators.Keys];
+
+    /// <inheritdoc />
+    public string? GetUnavailableReason(int doorId) =>
+        _unavailable.TryGetValue(doorId, out var reason)
+            ? reason
+            : null;
 
     // -------------------------------------------------------------------------
     // Lifecycle
@@ -137,6 +147,25 @@ public sealed class DynamicSimulatorBank : IReaderBank, IAsyncDisposable
     {
         await RemoveDoor(door.Id).ConfigureAwait(false); // Dispose any existing instance first
 
+        if (_gpio is null)
+        {
+            if (door.Protocol == ProtocolType.Wiegand)
+            {
+                _unavailable[door.Id] = $"Door {door.Id} ({door.Label}) is a Wiegand door. {HostCapabilities.GpioUnavailableMessage}";
+                _logger.LogWarning("Door {Id} ({Label}) not started — Wiegand requires GPIO, which is unavailable on this host",
+                    door.Id, door.Label);
+
+                return;
+            }
+
+            if (door.DpsPin is not null || door.RexPin is not null)
+            {
+                _logger.LogWarning(
+                    "Door {Id} ({Label}) has GPIO DPS/REX pins but GPIO is unavailable on this host — those contacts are ignored",
+                    door.Id, door.Label);
+            }
+        }
+
         IReaderSimulator sim = door.Protocol == ProtocolType.Wiegand
             ? new DoorSimulator(door, _gpio, _modbus, _modbusTcp, _loggerFactory.CreateLogger<DoorSimulator>())
             : new OsdpReaderSimulator(door, _gpio, _modbus, _modbusTcp, _loggerFactory);
@@ -153,6 +182,8 @@ public sealed class DynamicSimulatorBank : IReaderBank, IAsyncDisposable
     /// </summary>
     public async Task RemoveDoor(int doorId)
     {
+        _unavailable.TryRemove(doorId, out var _);
+
         if (!_simulators.TryRemove(doorId, out var sim))
             return;
 

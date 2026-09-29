@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+**/logs/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/TestResults/
+.vs/
+test/
+*.DotSettings
+*.tss
+# global.json pins the dev SDK patch (and the test runner); the image's SDK tag controls the build.
+global.json
+Dockerfile
+.dockerignore

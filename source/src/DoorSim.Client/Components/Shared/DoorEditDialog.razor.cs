@@ -10,10 +10,13 @@ public partial class DoorEditDialog
     private const int AdvancedOsdpTabIndex = 1;
     private const int RelayBoardTabIndex = 4;
 
+    private const string GpioRequiredHint = "requires GPIO (Raspberry Pi)";
+
     private int _activeTabIndex;
     private string[] _availableSerialPorts = [];
     private string? _error;
     private DoorFormModel _form = new();
+    private bool _gpioAvailable = true;
     private bool _saving;
 
     [CascadingParameter]
@@ -82,6 +85,16 @@ public partial class DoorEditDialog
                 ModbusTcpPort = door.ModbusTcpPort,
                 ModbusUnitId = door.ModbusUnitId,
             };
+        }
+
+        _gpioAvailable = await SystemClient.IsGpioAvailableAsync();
+
+        // New doors on a host without GPIO start on the options that can actually run here.
+        if (Editing is null && !_gpioAvailable)
+        {
+            _form.Protocol = ProtocolType.Osdp;
+            _form.DpsModeIsModbus = true;
+            _form.RexModeIsModbus = true;
         }
 
         await LoadAvailableSerialPortsAsync();
@@ -297,6 +310,10 @@ public partial class DoorEditDialog
     private Task OnHasDpsChanged(bool value)
     {
         _form.HasDps = value;
+
+        if (value && !_gpioAvailable)
+            _form.DpsModeIsModbus = true;
+
         ResetActiveTabIfDisabled();
 
         return Task.CompletedTask;
@@ -313,6 +330,10 @@ public partial class DoorEditDialog
     private Task OnHasRexChanged(bool value)
     {
         _form.HasRex = value;
+
+        if (value && !_gpioAvailable)
+            _form.RexModeIsModbus = true;
+
         ResetActiveTabIfDisabled();
 
         return Task.CompletedTask;

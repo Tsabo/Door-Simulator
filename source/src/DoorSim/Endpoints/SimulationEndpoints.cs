@@ -16,8 +16,8 @@ public static class SimulationEndpoints
                 if (validationError is not null)
                     return Results.BadRequest(validationError);
 
-                if (!bank.ContainsReader(request.ReaderId))
-                    return Results.NotFound($"Reader {request.ReaderId} not found in the active bank.");
+                if (MissingReader(bank, request.ReaderId) is { } missing)
+                    return missing;
 
                 if (request.EventType != DoorEventType.EgressCycle)
                 {
@@ -54,7 +54,8 @@ public static class SimulationEndpoints
                 "EventType-driven behavior with a raw card value instead of a saved library card.")
             .Produces(StatusCodes.Status200OK)
             .Produces<string>(StatusCodes.Status400BadRequest)
-            .Produces<string>(StatusCodes.Status404NotFound);
+            .Produces<string>(StatusCodes.Status404NotFound)
+            .Produces<string>(StatusCodes.Status409Conflict);
 
         // Raw value send (no library entry needed)
         group.MapPost("/send-card", async (RawCardRequest request, SimulationOrchestrator orchestrator, IReaderBank bank, CardFormatService formatService) =>
@@ -64,8 +65,8 @@ public static class SimulationEndpoints
                 if (validationError is not null)
                     return Results.BadRequest(validationError);
 
-                if (!bank.ContainsReader(request.ReaderId))
-                    return Results.NotFound($"Reader {request.ReaderId} not found in the active bank.");
+                if (MissingReader(bank, request.ReaderId) is { } missing)
+                    return missing;
 
                 if (request.Format == WiegandFormat.Custom)
                 {
@@ -93,7 +94,8 @@ public static class SimulationEndpoints
                 "EventType = AccessCycle or EgressCycle.")
             .Produces(StatusCodes.Status200OK)
             .Produces<string>(StatusCodes.Status400BadRequest)
-            .Produces<string>(StatusCodes.Status404NotFound);
+            .Produces<string>(StatusCodes.Status404NotFound)
+            .Produces<string>(StatusCodes.Status409Conflict);
 
         // Raw bit-stream send (no library entry or format calculation needed)
         group.MapPost("/send-bits", async (RawBitsRequest request, SimulationOrchestrator orchestrator, IReaderBank bank) =>
@@ -103,8 +105,8 @@ public static class SimulationEndpoints
                 if (validationError is not null)
                     return Results.BadRequest(validationError);
 
-                if (!bank.ContainsReader(request.ReaderId))
-                    return Results.NotFound($"Reader {request.ReaderId} not found in the active bank.");
+                if (MissingReader(bank, request.ReaderId) is { } missing)
+                    return missing;
 
                 await orchestrator.SendBitsAsync(request);
 
@@ -118,7 +120,8 @@ public static class SimulationEndpoints
                 "across D0/D1 in left-to-right order. For OSDP, bits are queued as an osdp_RAW reply.")
             .Produces(StatusCodes.Status200OK)
             .Produces<string>(StatusCodes.Status400BadRequest)
-            .Produces<string>(StatusCodes.Status404NotFound);
+            .Produces<string>(StatusCodes.Status404NotFound)
+            .Produces<string>(StatusCodes.Status409Conflict);
 
         group.MapPost("/raw-event", async (RawDoorEventRequest request, SimulationOrchestrator orchestrator, IReaderBank bank, CardFormatService formatService) =>
             {
@@ -127,8 +130,8 @@ public static class SimulationEndpoints
                 if (validationError is not null)
                     return Results.BadRequest(validationError);
 
-                if (!bank.ContainsReader(request.ReaderId))
-                    return Results.NotFound($"Reader {request.ReaderId} not found in the active bank.");
+                if (MissingReader(bank, request.ReaderId) is { } missing)
+                    return missing;
 
                 if (request.EventType != DoorEventType.EgressCycle && request.Format == WiegandFormat.Custom)
                 {
@@ -156,13 +159,14 @@ public static class SimulationEndpoints
                 "EventType = CardReadOnly.")
             .Produces(StatusCodes.Status200OK)
             .Produces<string>(StatusCodes.Status400BadRequest)
-            .Produces<string>(StatusCodes.Status404NotFound);
+            .Produces<string>(StatusCodes.Status404NotFound)
+            .Produces<string>(StatusCodes.Status409Conflict);
 
         // Direct DPS / REX primitives (no status tracking, instant)
         group.MapPost("/door/{readerId:int}/open", async (int readerId, SimulationOrchestrator orchestrator, IReaderBank bank) =>
             {
-                if (!bank.ContainsReader(readerId))
-                    return Results.NotFound($"Reader {readerId} not found in the active bank.");
+                if (MissingReader(bank, readerId) is { } missing)
+                    return missing;
 
                 await orchestrator.OpenDoorAsync(readerId);
 
@@ -173,12 +177,13 @@ public static class SimulationEndpoints
             .WithDescription("Direct hardware primitive — takes effect immediately, bypassing the status " +
                              "tracking and timing that /event and /raw-event use.")
             .Produces(StatusCodes.Status200OK)
-            .Produces<string>(StatusCodes.Status404NotFound);
+            .Produces<string>(StatusCodes.Status404NotFound)
+            .Produces<string>(StatusCodes.Status409Conflict);
 
         group.MapPost("/door/{readerId:int}/close", async (int readerId, SimulationOrchestrator orchestrator, IReaderBank bank) =>
             {
-                if (!bank.ContainsReader(readerId))
-                    return Results.NotFound($"Reader {readerId} not found in the active bank.");
+                if (MissingReader(bank, readerId) is { } missing)
+                    return missing;
 
                 await orchestrator.CloseDoorAsync(readerId);
 
@@ -188,12 +193,13 @@ public static class SimulationEndpoints
             .WithSummary("Force the door position switch (DPS) to the closed state.")
             .WithDescription("Direct hardware primitive — takes effect immediately, no status tracking.")
             .Produces(StatusCodes.Status200OK)
-            .Produces<string>(StatusCodes.Status404NotFound);
+            .Produces<string>(StatusCodes.Status404NotFound)
+            .Produces<string>(StatusCodes.Status409Conflict);
 
         group.MapPost("/rex/{readerId:int}/quick", async (int readerId, SimulationOrchestrator orchestrator, IReaderBank bank) =>
             {
-                if (!bank.ContainsReader(readerId))
-                    return Results.NotFound($"Reader {readerId} not found in the active bank.");
+                if (MissingReader(bank, readerId) is { } missing)
+                    return missing;
 
                 await orchestrator.QuickRexAsync(readerId);
 
@@ -204,13 +210,14 @@ public static class SimulationEndpoints
             .WithDescription("Direct hardware primitive — no status tracking. Does not open the door itself; " +
                              "a panel watching REX is expected to react to it.")
             .Produces(StatusCodes.Status200OK)
-            .Produces<string>(StatusCodes.Status404NotFound);
+            .Produces<string>(StatusCodes.Status404NotFound)
+            .Produces<string>(StatusCodes.Status409Conflict);
 
         // Reader status polling
         group.MapGet("/status/{readerId:int}", (int readerId, SimulationOrchestrator orchestrator, IReaderBank bank) =>
             {
-                if (!bank.ContainsReader(readerId))
-                    return Results.NotFound($"Reader {readerId} not found in the active bank.");
+                if (MissingReader(bank, readerId) is { } missing)
+                    return missing;
 
                 return Results.Ok(orchestrator.GetStatus(readerId));
             })
@@ -219,13 +226,14 @@ public static class SimulationEndpoints
             .WithDescription("One of Idle, Running, Success, or Error — reflects the most recent /event, " +
                              "/send-card, or /raw-event call for this reader.")
             .Produces<SimulationStatus>()
-            .Produces<string>(StatusCodes.Status404NotFound);
+            .Produces<string>(StatusCodes.Status404NotFound)
+            .Produces<string>(StatusCodes.Status409Conflict);
 
         // OSDP connectivity (always true for Wiegand)
         group.MapGet("/connectivity/{readerId:int}", (int readerId, SimulationOrchestrator orchestrator, IReaderBank bank) =>
             {
-                if (!bank.ContainsReader(readerId))
-                    return Results.NotFound($"Reader {readerId} not found in the active bank.");
+                if (MissingReader(bank, readerId) is { } missing)
+                    return missing;
 
                 return Results.Ok(orchestrator.GetConnectivity(readerId));
             })
@@ -234,7 +242,8 @@ public static class SimulationEndpoints
             .WithDescription("Always true for Wiegand readers (no handshake). For OSDP readers, reflects " +
                              "whether the panel has polled within the connection timeout window.")
             .Produces<bool>()
-            .Produces<string>(StatusCodes.Status404NotFound);
+            .Produces<string>(StatusCodes.Status404NotFound)
+            .Produces<string>(StatusCodes.Status409Conflict);
 
         // SSE stream — pushes DoorStatusUpdate[] for all active doors every 500 ms.
         // Replaces per-reader polling; a single persistent connection covers all doors.
@@ -249,20 +258,21 @@ public static class SimulationEndpoints
         // Queue inspection and management
         group.MapGet("/queue/{readerId:int}", (int readerId, SimulationOrchestrator orchestrator, IReaderBank bank) =>
             {
-                if (!bank.ContainsReader(readerId))
-                    return Results.NotFound($"Reader {readerId} not found in the active bank.");
+                if (MissingReader(bank, readerId) is { } missing)
+                    return missing;
 
                 return Results.Ok(orchestrator.GetQueue(readerId));
             })
             .WithName("GetReaderQueue")
             .WithSummary("Get the list of active and pending simulation items in a reader's queue.")
             .Produces<SimulationQueueItemDto[]>()
-            .Produces<string>(StatusCodes.Status404NotFound);
+            .Produces<string>(StatusCodes.Status404NotFound)
+            .Produces<string>(StatusCodes.Status409Conflict);
 
         group.MapDelete("/queue/{readerId:int}", (int readerId, SimulationOrchestrator orchestrator, IReaderBank bank) =>
             {
-                if (!bank.ContainsReader(readerId))
-                    return Results.NotFound($"Reader {readerId} not found in the active bank.");
+                if (MissingReader(bank, readerId) is { } missing)
+                    return missing;
 
                 orchestrator.ClearQueue(readerId);
 
@@ -271,12 +281,13 @@ public static class SimulationEndpoints
             .WithName("ClearReaderQueue")
             .WithSummary("Clear all pending items from a reader's simulation queue.")
             .Produces(StatusCodes.Status204NoContent)
-            .Produces<string>(StatusCodes.Status404NotFound);
+            .Produces<string>(StatusCodes.Status404NotFound)
+            .Produces<string>(StatusCodes.Status409Conflict);
 
         group.MapDelete("/queue/{readerId:int}/{itemId:guid}", (int readerId, Guid itemId, SimulationOrchestrator orchestrator, IReaderBank bank) =>
             {
-                if (!bank.ContainsReader(readerId))
-                    return Results.NotFound($"Reader {readerId} not found in the active bank.");
+                if (MissingReader(bank, readerId) is { } missing)
+                    return missing;
 
                 var cancelled = orchestrator.CancelQueueItem(readerId, itemId);
 
@@ -287,8 +298,23 @@ public static class SimulationEndpoints
             .WithName("CancelReaderQueueItem")
             .WithSummary("Cancel a specific simulation item in a reader's queue.")
             .Produces(StatusCodes.Status204NoContent)
-            .Produces<string>(StatusCodes.Status404NotFound);
+            .Produces<string>(StatusCodes.Status404NotFound)
+            .Produces<string>(StatusCodes.Status409Conflict);
 
         return app;
+    }
+
+    /// <summary>
+    /// 404 when the reader is unknown; 409 when the door exists but cannot run on this host
+    /// (e.g. a Wiegand door without GPIO); null when the reader is active.
+    /// </summary>
+    private static IResult? MissingReader(IReaderBank bank, int readerId)
+    {
+        if (bank.ContainsReader(readerId))
+            return null;
+
+        return bank.GetUnavailableReason(readerId) is { } reason
+            ? Results.Conflict(reason)
+            : Results.NotFound($"Reader {readerId} not found in the active bank.");
     }
 }
