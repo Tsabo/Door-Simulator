@@ -1,0 +1,147 @@
+@* Replays a logged credential send. The event kind is fixed; only the payload and the target
+   readers can change. *@
+@inject SimulationApiClient Sim
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudPaper Outlined="true" Class="pa-3 mb-4">
+            <div class="d-flex flex-wrap align-center" style="gap:8px 24px">
+                <div>
+                    <MudText Typo="Typo.overline" Class="muted">Originally sent to</MudText>
+                    <MudText Typo="Typo.body2">@OriginalLabel</MudText>
+                </div>
+                <div>
+                    <MudText Typo="Typo.overline" Class="muted">When</MudText>
+                    <MudText Typo="Typo.body2">@Record.CompletedAt.ToLocalTime().ToString("MMM d HH:mm:ss")</MudText>
+                </div>
+                <div>
+                    <MudText Typo="Typo.overline" Class="muted">Type</MudText>
+                    <MudText Typo="Typo.body2">@SimulationEventFormatting.SplitPascal(Record.Kind.ToString())</MudText>
+                </div>
+                <div>
+                    <MudText Typo="Typo.overline" Class="muted">Outcome</MudText>
+                    <div>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                                 Color="@SimulationEventFormatting.OutcomeColor(Record.Outcome)">
+                            @Record.Outcome
+                        </MudChip>
+                    </div>
+                </div>
+            </div>
+            @if (Record.Error is not null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Error">@Record.Error</MudText>
+            }
+            @if (Record.CardEntryId.HasValue)
+            {
+                <MudText Typo="Typo.caption" Class="muted">
+                    Originally from library card #@Record.CardEntryId. It's resent as raw values, so edits here don't change the library.
+                </MudText>
+            }
+        </MudPaper>
+
+        @if (IsRawBits)
+        {
+            <MudTextField T="string"
+                          @bind-Value="_bits"
+                          Label="Bits"
+                          HelperText="@($"{_bits.Length} bits")"
+                          Immediate="true"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          Class="mono"
+                          Error="@(BitsError is not null)"
+                          ErrorText="@BitsError" />
+        }
+        else
+        {
+            <div class="d-flex flex-wrap" style="gap:16px">
+                <MudNumericField T="uint"
+                                 @bind-Value="_cardNumber"
+                                 Label="Card number"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Class="mono"
+                                 Style="min-width:160px" />
+                <MudNumericField T="ushort"
+                                 @bind-Value="_facilityCode"
+                                 Label="Facility code"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Class="mono"
+                                 Style="min-width:140px" />
+                <MudSelect T="WiegandFormat"
+                           @bind-Value="_format"
+                           Label="Format"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Style="min-width:180px">
+                    @foreach (var format in Enum.GetValues<WiegandFormat>())
+                    {
+                        <MudSelectItem T="WiegandFormat" Value="@format">@format</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (_format == WiegandFormat.Custom)
+                {
+                    <MudSelect T="int?"
+                               @bind-Value="_customFormatId"
+                               Label="Custom format"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Style="min-width:180px"
+                               Error="@(_customFormatId is null)"
+                               ErrorText="Pick a custom format">
+                        @foreach (var custom in CustomFormats)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)custom.Id)">@custom.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            </div>
+        }
+
+        <MudSelect T="int"
+                   @bind-SelectedValues="_targets"
+                   MultiSelection="true"
+                   Label="Send to"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Class="mt-4"
+                   ToStringFunc="@DoorLabel">
+            @foreach (var door in Doors)
+            {
+                <MudSelectItem T="int" Value="@door.Id">@door.Label</MudSelectItem>
+            }
+        </MudSelect>
+
+        @if (!OriginalDoorExists)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
+                The original reader no longer exists. Pick one or more readers to send to.
+            </MudAlert>
+        }
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text"
+                   StartIcon="@Icons.Material.Filled.Undo"
+                   OnClick="Reset"
+                   Disabled="_sending">
+            Reset
+        </MudButton>
+        <MudSpacer />
+        <MudButton Variant="Variant.Text" OnClick="Cancel" Disabled="_sending">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.Send"
+                   OnClick="TransmitAsync"
+                   Disabled="@(!CanTransmit)">
+            @(_sending ? "Sending…" : "Transmit")
+        </MudButton>
+    </DialogActions>
+</MudDialog>

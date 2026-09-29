@@ -10,43 +10,43 @@ public class SimulationApiClient(HttpClient http)
     public async Task RunEventAsync(DoorEventRequest request)
     {
         var response = await http.PostAsJsonAsync("/api/simulate/event", request, DoorSimJson.Options);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     public async Task SendCardAsync(RawCardRequest request)
     {
         var response = await http.PostAsJsonAsync("/api/simulate/send-card", request, DoorSimJson.Options);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     public async Task SendBitsAsync(RawBitsRequest request)
     {
         var response = await http.PostAsJsonAsync("/api/simulate/send-bits", request, DoorSimJson.Options);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     public async Task RunRawEventAsync(RawDoorEventRequest request)
     {
         var response = await http.PostAsJsonAsync("/api/simulate/raw-event", request, DoorSimJson.Options);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     public async Task OpenDoorAsync(int readerId)
     {
         var response = await http.PostAsync($"/api/simulate/door/{readerId}/open", null);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     public async Task CloseDoorAsync(int readerId)
     {
         var response = await http.PostAsync($"/api/simulate/door/{readerId}/close", null);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     public async Task QuickRexAsync(int readerId)
     {
         var response = await http.PostAsync($"/api/simulate/rex/{readerId}/quick", null);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     public async Task<SimulationStatus> GetStatusAsync(int readerId) =>
@@ -61,13 +61,13 @@ public class SimulationApiClient(HttpClient http)
     public async Task ClearQueueAsync(int readerId)
     {
         var response = await http.DeleteAsync($"/api/simulate/queue/{readerId}");
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     public async Task CancelQueueItemAsync(int readerId, Guid itemId)
     {
         var response = await http.DeleteAsync($"/api/simulate/queue/{readerId}/{itemId}");
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response);
     }
 
     /// <summary>
@@ -157,5 +157,22 @@ public class SimulationApiClient(HttpClient http)
             if (updates is not null)
                 yield return updates;
         }
+    }
+
+    /// <summary>
+    /// Like <see cref="HttpResponseMessage.EnsureSuccessStatusCode" />, but carries the server's
+    /// validation message (400/404 bodies are plain strings) so callers can show it.
+    /// </summary>
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response)
+    {
+        if (response.IsSuccessStatusCode)
+            return;
+
+        var body = await response.Content.ReadAsStringAsync();
+        var message = string.IsNullOrWhiteSpace(body)
+            ? $"Request failed with status {(int)response.StatusCode} ({response.ReasonPhrase})."
+            : body.Trim().Trim('"');
+
+        throw new HttpRequestException(message, null, response.StatusCode);
     }
 }

@@ -1,0 +1,121 @@
+@page "/transmit-log"
+@inject MetricsApiClient MetricsClient
+@inject DoorApiClient DoorClient
+@inject CardFormatApiClient FormatClient
+@inject IDialogService Dialog
+@implements IDisposable
+
+<PageTitle>Transmit Log — DoorSim</PageTitle>
+
+<div class="d-flex align-center justify-space-between flex-wrap mb-6" style="gap:8px">
+    <MudText Typo="Typo.h4">Transmit Log</MudText>
+    <div class="d-flex align-center flex-wrap gap-2">
+        <MudSelect T="int?" Value="_doorFilter" ValueChanged="OnDoorFilterChanged"
+                   Label="Door" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:180px;" Clearable="true">
+            <MudSelectItem T="int?" Value="@((int?)null)">All doors</MudSelectItem>
+            @foreach (var door in _doors)
+            {
+                <MudSelectItem T="int?" Value="@((int?)door.Id)">@door.Label</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="string" @bind-Value="_kindFilter"
+                   Label="Type" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:180px;">
+            <MudSelectItem T="string" Value="@AllKinds">All types</MudSelectItem>
+            <MudSelectItem T="string" Value="@ResendableKinds">Resendable only</MudSelectItem>
+            @foreach (var kind in Enum.GetValues<SimulationEventKind>())
+            {
+                <MudSelectItem T="string" Value="@kind.ToString()">@SimulationEventFormatting.SplitPascal(kind.ToString())</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int" Value="_limit" ValueChanged="OnLimitChanged"
+                   Label="Rows" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:110px;">
+            @foreach (var limit in Limits)
+            {
+                <MudSelectItem T="int" Value="@limit">@limit</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTooltip Text="Refresh now">
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="RefreshAsync" Disabled="@_loading" />
+        </MudTooltip>
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">
+        @_error
+    </MudAlert>
+}
+
+@if (_loading && _events.Length == 0)
+{
+    <MudContainer Class="d-flex justify-center mt-16">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    </MudContainer>
+}
+else if (_events.Length == 0)
+{
+    <MudAlert Severity="Severity.Info" Dense="true">
+        No simulations recorded yet. Run a card read from the Reader Panel and it will show up here.
+    </MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.body2" Class="muted mb-2">
+        Click a card read, access cycle or raw-bits row to edit it and send it again.
+    </MudText>
+    <MudPaper Elevation="2">
+        <MudTable T="SimulationEventRecord"
+                  Items="@FilteredEvents"
+                  Dense="true"
+                  Hover="true"
+                  Elevation="0"
+                  FixedHeader="true"
+                  Height="calc(100vh - 260px)"
+                  OnRowClick="OnRowClickAsync"
+                  RowClassFunc="RowClass">
+            <HeaderContent>
+                <MudTh Style="width:40px"></MudTh>
+                <MudTh>When</MudTh>
+                <MudTh>Reader</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh>Payload</MudTh>
+                <MudTh>Outcome</MudTh>
+                <MudTh Style="text-align:right">Duration</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    @if (SimulationEventFormatting.IsResendable(context))
+                    {
+                        <MudTooltip Text="Edit and resend">
+                            <MudIcon Icon="@Icons.Material.Filled.Replay" Size="Size.Small" Color="Color.Primary" />
+                        </MudTooltip>
+                    }
+                    else
+                    {
+                        <MudTooltip Text="Only credential sends can be resent">
+                            <MudIcon Icon="@Icons.Material.Filled.Block" Size="Size.Small" Class="muted" />
+                        </MudTooltip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="When">@context.CompletedAt.ToLocalTime().ToString("MMM d HH:mm:ss")</MudTd>
+                <MudTd DataLabel="Reader">@(string.IsNullOrEmpty(context.Label) ? $"Door {context.DoorId}" : context.Label)</MudTd>
+                <MudTd DataLabel="Type">@SimulationEventFormatting.SplitPascal(context.Kind.ToString())</MudTd>
+                <MudTd DataLabel="Payload" Class="mono">@PayloadLabel(context)</MudTd>
+                <MudTd DataLabel="Outcome">
+                    <MudChip T="string" Size="Size.Small" Color="@SimulationEventFormatting.OutcomeColor(context.Outcome)" Variant="Variant.Text">
+                        @context.Outcome
+                    </MudChip>
+                    @if (context.Error is not null)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Error">@context.Error</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Duration" Style="text-align:right">@context.DurationMs ms</MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Color="Color.Tertiary" Class="pa-4">No simulations match this filter.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+}

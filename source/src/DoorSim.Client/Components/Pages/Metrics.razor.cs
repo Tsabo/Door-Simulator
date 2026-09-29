@@ -1,3 +1,4 @@
+using DoorSim.Client.Components.Shared;
 using MudBlazor;
 
 namespace DoorSim.Client.Components.Pages;
@@ -166,22 +167,9 @@ public partial class Metrics : IDisposable
 
     private static string DayLabel(int day) => DayLabels[day];
 
-    private static string CredentialLabel(SimulationEventRecord record)
-    {
-        if (record.RawBits is not null)
-            return $"{record.RawBits.Length} raw bits";
+    private static string CredentialLabel(SimulationEventRecord record) => SimulationEventFormatting.CredentialLabel(record);
 
-        return record.CardNumber.HasValue
-            ? $"#{record.CardNumber} FC:{record.FacilityCode} ({record.Format})"
-            : "—";
-    }
-
-    private static Color OutcomeColor(SimulationEventOutcome outcome) => outcome switch
-    {
-        SimulationEventOutcome.Success => Color.Success,
-        SimulationEventOutcome.Cancelled => Color.Warning,
-        var _ => Color.Error,
-    };
+    private static Color OutcomeColor(SimulationEventOutcome outcome) => SimulationEventFormatting.OutcomeColor(outcome);
 
     private static string FormatGap(double seconds) => seconds switch
     {
@@ -191,8 +179,5 @@ public partial class Metrics : IDisposable
         var _ => $"{seconds / 3600:0.#}h",
     };
 
-    private static string SplitPascal(string value) =>
-        string.Concat(value.Select((c, i) => i > 0 && char.IsUpper(c)
-            ? " " + c
-            : c.ToString()));
+    private static string SplitPascal(string value) => SimulationEventFormatting.SplitPascal(value);
 }

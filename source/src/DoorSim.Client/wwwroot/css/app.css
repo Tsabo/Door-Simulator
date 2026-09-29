@@ -51,7 +51,8 @@ h2 { font-size: 18px; margin: 0 0 16px; }
    fixed advance width, and by every mask/hex field. Global rather than scoped because it must
    also reach the <input> MudBlazor renders inside MudTextField. */
 .mono,
-.mono input {
+.mono input,
+.mono textarea {
     font-family: "Cascadia Code", "Consolas", monospace;
 }
 
@@ -59,4 +60,14 @@ h2 { font-size: 18px; margin: 0 0 16px; }
    not "secondary text", so it is the wrong tool for de-emphasised copy. */
 .muted {
     color: var(--mud-palette-text-secondary);
+}
+
+/* Transmit log rows: only credential sends open the resend dialog, so only those look clickable. */
+.transmit-row {
+    cursor: pointer;
+}
+
+.transmit-row-disabled {
+    cursor: default;
+    opacity: 0.55;
 }
