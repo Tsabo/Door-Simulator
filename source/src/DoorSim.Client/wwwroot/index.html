@@ -3,6 +3,19 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+        Resolve the theme before first paint so the boot loader (and then the app) never flashes
+        the wrong colours. Mirrors doorsimTheme in js/theme.js: same storage key, same attribute.
+    -->
+    <script>
+        (function () {
+            var mode = "system";
+            try { mode = localStorage.getItem("doorsim.theme") || "system"; } catch (e) { }
+            var dark = mode === "dark"
+                || (mode !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+            document.documentElement.dataset.theme = dark ? "dark" : "light";
+        })();
+    </script>
     <title>DoorSim</title>
     <base href="/" />
     <link rel="stylesheet" href="css/app.css" />
@@ -119,6 +132,26 @@
             content: var(--blazor-load-percentage-text, "0%");
         }
 
+        /*  Dark mode (data-theme is set by the inline script above). Colours mirror DoorSimTheme's
+            PaletteDark Background / TextPrimary. The door keeps its wood and brass; it only gets a
+            brighter rim and deeper shadow so the dark frame reads against the dark page.  */
+        html[data-theme="dark"] body {
+            background: #1a1a27;
+        }
+
+        html[data-theme="dark"] .dsb,
+        html[data-theme="dark"] .dsb-pct {
+            color: #b2b0bf;
+        }
+
+        html[data-theme="dark"] .dsb-rim {
+            stroke: rgba(255,255,255,.18);
+        }
+
+        html[data-theme="dark"] .dsb-shadow {
+            fill: rgba(0,0,0,.45);
+        }
+
         @media (prefers-reduced-motion: reduce) {
             .dsb-door__panel, .dsb-when-open, .dsb-when-shut { transition-duration: .01ms; }
             .dsb-blink { animation: none; }
@@ -144,9 +177,9 @@
                     <!-- light spilling out of the opening, past the frame -->
                     <rect class="dsb-when-open" x="0" y="0" width="80" height="112" fill="url(#dsbHalo)" />
 
-                    <rect x="3" y="3" width="74" height="106" rx="11" fill="rgba(0,0,0,.22)" />
+                    <rect class="dsb-shadow" x="3" y="3" width="74" height="106" rx="11" fill="rgba(0,0,0,.22)" />
                     <rect x="0" y="0" width="74" height="106" rx="11" fill="#3E2723" />
-                    <rect x="1" y="1" width="72" height="104" rx="10" fill="none"
+                    <rect class="dsb-rim" x="1" y="1" width="72" height="104" rx="10" fill="none"
                           stroke="rgba(255,255,255,.07)" stroke-width="1" />
 
                     <rect x="7" y="7" width="60" height="88" rx="3" fill="#0d1520" />
@@ -214,6 +247,7 @@
         An unhandled error has occurred.
         <a href="." class="reload">Reload</a>
     </div>
+    <script src="js/theme.js"></script>
     <script src="_framework/blazor.webassembly.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script src="js/logs.js"></script>

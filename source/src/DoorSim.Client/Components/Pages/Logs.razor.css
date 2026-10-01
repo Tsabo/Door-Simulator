@@ -91,3 +91,9 @@
 ::deep .json-bool { color: #4fc1ff; }
 ::deep .sql-comment { color: #7f848e; font-style: italic; }
 ::deep .sql-punct, ::deep .json-punct { color: #d4d4d4; }
+
+/* The console is a dark terminal in both themes; in dark mode it needs an edge so it doesn't melt
+   into the dark card surface. */
+html[data-theme="dark"] .log-console {
+    border: 1px solid var(--mud-palette-lines-default);
+}

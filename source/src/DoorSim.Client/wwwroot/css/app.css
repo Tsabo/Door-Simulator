@@ -1,5 +1,27 @@
 /* Global overrides and essential styles for MudBlazor */
 
+/* Theme hook: <html data-theme="light|dark"> is set before first paint by index.html and kept in
+   step with MudBlazor's palette by MainLayout. Custom CSS (including scoped .razor.css, via
+   `html[data-theme="dark"] .foo`) keys off it for anything the --mud-palette-* vars don't cover. */
+
+/* Text over a low-alpha palette tint (bit grid, encode strip). -darken stays legible on a pale tint
+   against a light surface; on a dark surface it vanishes, so dark mode switches to -lighten. */
+:root {
+    --ds-tint-info-text: var(--mud-palette-info-darken);
+    --ds-tint-tertiary-text: var(--mud-palette-tertiary-darken);
+    --ds-tint-warning-text: var(--mud-palette-warning-darken);
+    --ds-tint-success-text: var(--mud-palette-success-darken);
+    --ds-tint-error-text: var(--mud-palette-error-darken);
+}
+
+html[data-theme="dark"] {
+    --ds-tint-info-text: var(--mud-palette-info-lighten);
+    --ds-tint-tertiary-text: var(--mud-palette-tertiary-lighten);
+    --ds-tint-warning-text: var(--mud-palette-warning-lighten);
+    --ds-tint-success-text: var(--mud-palette-success-lighten);
+    --ds-tint-error-text: var(--mud-palette-error-lighten);
+}
+
 html, body {
     height: 100%;
 }
@@ -18,7 +40,7 @@ body {
 .loading {
     padding: 40px;
     text-align: center;
-    color: #666;
+    color: var(--mud-palette-text-secondary);
 }
 
 /* Blazor error UI */
@@ -31,6 +53,12 @@ body {
     left: 0;
     right: 0;
     z-index: 1000;
+}
+
+html[data-theme="dark"] #blazor-error-ui {
+    background: #3a1d22;
+    border-top-color: #5c2a31;
+    color: #f8d7da;
 }
 
 #blazor-error-ui .dismiss {

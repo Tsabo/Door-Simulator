@@ -8,20 +8,14 @@
          aria-label="Reader @Label">
 
         @* --- Body shadow --- *@
-        <rect x="3" y="3" width="76" height="108" rx="11" fill="rgba(0,0,0,0.25)"/>
+        <rect class="reader-shadow" x="3" y="3" width="76" height="108" rx="11" fill="rgba(0,0,0,0.25)"/>
 
         @* --- Main body --- *@
         <rect x="0" y="0" width="76" height="108" rx="11" fill="#1c1c1e"/>
 
         @* --- Subtle edge highlight --- *@
-        <rect x="1" y="1" width="74" height="106" rx="10"
+        <rect class="reader-rim" x="1" y="1" width="74" height="106" rx="10"
               fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
-
-        @* --- LED bar (the coloured strip at the top, like on a real reader) --- *@
-        <rect x="7" y="7" width="62" height="14" rx="5"
-              fill="@LedCssColor"
-              class="@LedClass"
-              filter="url(#glow)"/>
 
         @* --- Glow filter: softens / blooms the LED bar --- *@
         <defs>
@@ -33,6 +27,12 @@
                 </feMerge>
             </filter>
         </defs>
+
+        @* --- LED bar (the coloured strip at the top, like on a real reader). Kept crisp; the
+               bloom comes from the faint filtered copy drawn over it below. --- *@
+        <rect x="7" y="7" width="62" height="14" rx="5"
+              fill="@LedCssColor"
+              class="@LedClass"/>
         <rect x="7" y="7" width="62" height="14" rx="5"
               fill="@LedCssColor" opacity="0.35"
               filter="url(#glow-@_uid)"/>

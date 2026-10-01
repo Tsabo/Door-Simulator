@@ -36,7 +36,7 @@
 }
 
 .door-btn:focus-visible {
-    outline: 2px solid #7c4dff;
+    outline: 2px solid var(--mud-palette-primary);
     outline-offset: 4px;
     border-radius: 12px;
 }
@@ -86,7 +86,7 @@
 }
 
 .rex-btn:focus-visible {
-    outline: 2px solid #7c4dff;
+    outline: 2px solid var(--mud-palette-primary);
     outline-offset: 3px;
 }
 
@@ -106,6 +106,24 @@
 
 .rex-btn.rex-active .rex-label {
     color: #ef4444;
+}
+
+/* ── Dark mode ───────────────────────────────────────────────────
+   The door and sensor are physical objects and keep their colours in both themes. On a dark card
+   their dark frame/housing and black drop shadow vanish, so dark mode only brightens the rim and
+   deepens the shadow. CSS properties override the SVG presentation attributes in the markup, which
+   remain the light-mode values. */
+
+html[data-theme="dark"] .door-rim {
+    stroke: rgba(255,255,255,0.18);
+}
+
+html[data-theme="dark"] .door-shadow {
+    fill: rgba(0,0,0,0.45);
+}
+
+html[data-theme="dark"] .rex-btn:not(.rex-active):not(:hover) {
+    border-color: #37474F;
 }
 
 /* ── PIR LED pulse animation ─────────────────────────────────── */

@@ -54,14 +54,6 @@ boards work everywhere. Wiegand output and GPIO door contacts need a Raspberry
 Pi. On other hosts those options are disabled in the UI and rejected by the API
 and MCP tools. **Settings → Host** shows what the running server supports.
 
-### Releasing
-
-Push a `v<semver>` tag (e.g. `v1.2.0`, or `v1.2.0-rc1` for a prerelease).
-[release.yml](.github/workflows/release.yml) then tests, builds every package
-with [scripts/package.sh](scripts/package.sh), pushes the multi-arch image to
-GHCR, and publishes a GitHub Release with checksums. Run the workflow manually
-for a dry run that builds everything but publishes nothing.
-
 ## Advanced OSDP settings
 
 Each OSDP door has an **Advanced OSDP** tab in its edit dialog that controls the

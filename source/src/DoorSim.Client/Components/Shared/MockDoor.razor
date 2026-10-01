@@ -34,13 +34,13 @@
                 </defs>
 
                 @* ── Drop shadow ─── *@
-                <rect x="3" y="3" width="74" height="106" rx="11" fill="rgba(0,0,0,0.22)"/>
+                <rect class="door-shadow" x="3" y="3" width="74" height="106" rx="11" fill="rgba(0,0,0,0.22)"/>
 
                 @* ── Outer frame ─── *@
                 <rect x="0" y="0" width="74" height="106" rx="11" fill="#3E2723"/>
 
                 @* ── Frame edge highlight ─── *@
-                <rect x="1" y="1" width="72" height="104" rx="10"
+                <rect class="door-rim" x="1" y="1" width="72" height="104" rx="10"
                       fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
 
                 @if (!DoorIsOpen)
