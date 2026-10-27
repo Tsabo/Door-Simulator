@@ -5,7 +5,7 @@ namespace DoorSim.Client.Components.Shared;
 public partial class TransmitDialog
 {
     private string _bits = string.Empty;
-    private uint _cardNumber;
+    private ulong _cardNumber;
     private int? _customFormatId;
     private string? _error;
     private ushort _facilityCode;

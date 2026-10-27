@@ -103,7 +103,7 @@ public partial class CardEditDialog
     {
         public string Label { get; set; } = string.Empty;
         public int FacilityCode { get; set; }
-        public uint CardNumber { get; set; }
+        public ulong CardNumber { get; set; }
         public WiegandFormat Format { get; set; } = WiegandFormat.Wiegand26;
         public int? CustomFormatId { get; set; }
 

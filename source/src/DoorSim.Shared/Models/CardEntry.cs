@@ -4,7 +4,7 @@ public record CardEntry(
     int Id,
     string Label,
     ushort FacilityCode,
-    uint CardNumber,
+    ulong CardNumber,
     WiegandFormat Format,
     DateTimeOffset CreatedAt,
     int? CustomFormatId = null);

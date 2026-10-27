@@ -1,4 +1,5 @@
 using DoorSim.Data;
+using DoorSim.Data.Entities;
 using DoorSim.Services;
 using DoorSim.Shared.Models;
 using Microsoft.Data.Sqlite;
@@ -80,6 +81,40 @@ public class CardServiceValidationTests
         await Assert.That(error).IsNull();
         await Assert.That(updated).IsNotNull();
         await Assert.That(updated!.Label).IsEqualTo("New Label");
+    }
+
+    [Test]
+    public async Task Create_FortyBitCustomCard_PersistsCardNumberAbove32Bits()
+    {
+        using var fixture = new TestDbFixture();
+        var (format, _) = await new CardFormatService(fixture.Db).CreateAsync(new CustomCardFormat(0, "40-bit, 38-bit badge",
+            "X" + new string('C', 38) + "X",
+            "EPPPPPPPPPPPPPPPPPPPXXXXXXXXXXXXXXXXXXXX",
+            "XXXXXXXXXXXXXXXXXXXXPPPPPPPPPPPPPPPPPPPO",
+            null, DateTimeOffset.UtcNow));
+        var svc = new CardLibraryService(fixture.Db);
+
+        var card = new CardEntry(0, "Wide Card", 0, 170_109_991_638, WiegandFormat.Custom, DateTimeOffset.UtcNow, format!.Id);
+        var (created, error) = await svc.CreateAsync(card);
+        fixture.Db.ChangeTracker.Clear();
+        var reloaded = await svc.GetAsync(created!.Id);
+
+        await Assert.That(error).IsNull();
+        await Assert.That(reloaded!.CardNumber).IsEqualTo(170_109_991_638UL);
+    }
+
+    [Test]
+    public async Task CardNumberColumns_AreStoredAsInteger()
+    {
+        // The startup schema diff rebuilds SimulationEvents on any column-type change, so widening
+        // CardNumber must not change its SQLite storage type.
+        using var fixture = new TestDbFixture();
+
+        foreach (var entity in new[] { typeof(CardEntity), typeof(SimulationEventEntity) })
+        {
+            var column = fixture.Db.Model.FindEntityType(entity)!.FindProperty("CardNumber")!.GetColumnType();
+            await Assert.That(column).IsEqualTo("INTEGER");
+        }
     }
 
     [Test]

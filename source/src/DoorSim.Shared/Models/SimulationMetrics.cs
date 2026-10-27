@@ -21,7 +21,7 @@ public record DoorMetrics(
 
 public record KindCount(SimulationEventKind Kind, int Count);
 
-public record CardUsage(uint CardNumber, ushort FacilityCode, WiegandFormat Format, int Count);
+public record CardUsage(ulong CardNumber, ushort FacilityCode, WiegandFormat Format, int Count);
 
 public record FormatUsage(WiegandFormat Format, int Count);
 

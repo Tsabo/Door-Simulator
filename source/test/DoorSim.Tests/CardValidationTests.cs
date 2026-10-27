@@ -56,6 +56,23 @@ public class CardValidationTests
     }
 
     [Test]
+    [Arguments(34_359_738_367UL)]
+    [Arguments(170_109_991_638UL / 10)]
+    public async Task Validate_Wiegand37_ValidRange_ReturnsNull(ulong cn)
+    {
+        var error = CardValidation.ValidateCredential(cn, 0, WiegandFormat.Wiegand37);
+        await Assert.That(error).IsNull();
+    }
+
+    [Test]
+    public async Task Validate_Wiegand37_CardNumberAbove35Bits_ReturnsError()
+    {
+        var error = CardValidation.ValidateCredential(34_359_738_368UL, 0, WiegandFormat.Wiegand37);
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error).Contains("card number must be between 0 and 34,359,738,367");
+    }
+
+    [Test]
     [Arguments(0, 0)]
     [Arguments(255, 16777215)]
     public async Task Validate_Wiegand34_ValidRange_ReturnsNull(ushort fc, uint cn)

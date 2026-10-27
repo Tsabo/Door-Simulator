@@ -100,12 +100,6 @@ public sealed class CardFormatEncoder
     /// if either value overflows its field width — the mask arithmetic doesn't check this itself and
     /// would otherwise silently spill into neighboring bits.
     /// </summary>
-    public ulong Encode(uint cardNumber, ushort facilityCode) => Encode((ulong)cardNumber, facilityCode);
-
-    /// <summary>
-    /// Wide overload of <see cref="Encode(uint,ushort)" />, for formats whose card field is wider
-    /// than 32 bits — the case the 65-bit sentinel exists to serve.
-    /// </summary>
     public ulong Encode(ulong cardNumber, ulong facilityCode)
     {
         if (CardBitCount == 0)
@@ -172,16 +166,16 @@ public sealed class CardFormatEncoder
     }
 
     /// <summary>Extracts the credential and checks parity for a previously-built frame.</summary>
-    public (uint CardNumber, ushort FacilityCode, bool ParityValid) Decode(ulong bits)
+    public (ulong CardNumber, ushort FacilityCode, bool ParityValid) Decode(ulong bits)
     {
         var (cardNumber, facilityCode, parityValid) = DecodeWide(bits);
 
-        return ((uint)cardNumber, (ushort)facilityCode, parityValid);
+        return (cardNumber, (ushort)facilityCode, parityValid);
     }
 
     /// <summary>
-    /// Wide overload of <see cref="Decode(ulong)" />, for formats whose fields are too wide to fit
-    /// the <see cref="uint" />/<see cref="ushort" /> pair the rest of the pipeline carries.
+    /// Wide overload of <see cref="Decode(ulong)" />, for formats whose facility field is too wide
+    /// to fit the <see cref="ushort" /> the rest of the pipeline carries.
     /// </summary>
     public (ulong CardNumber, ulong FacilityCode, bool ParityValid) DecodeWide(ulong bits)
     {

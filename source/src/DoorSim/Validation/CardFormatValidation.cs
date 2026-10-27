@@ -50,7 +50,7 @@ public static class CardFormatValidation
     /// <summary>
     /// Validates a card number/facility code pair against a specific format's field widths.
     /// </summary>
-    public static string? ValidateCredential(uint cardNumber, ushort facilityCode, CustomCardFormat format)
+    public static string? ValidateCredential(ulong cardNumber, ushort facilityCode, CustomCardFormat format)
     {
         try
         {

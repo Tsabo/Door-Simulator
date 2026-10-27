@@ -122,7 +122,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         SendCardAsync(card.CardNumber, card.FacilityCode, card.Format);
 
     /// <inheritdoc />
-    public Task SendCardAsync(uint cardNumber, ushort facilityCode, WiegandFormat format)
+    public Task SendCardAsync(ulong cardNumber, ushort facilityCode, WiegandFormat format)
     {
         if (_device is null)
         {
@@ -154,7 +154,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
     }
 
     /// <inheritdoc />
-    public Task SendCardAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format)
+    public Task SendCardAsync(ulong cardNumber, ushort facilityCode, CustomCardFormat format)
     {
         if (_device is null)
         {
@@ -233,7 +233,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
     }
 
     /// <inheritdoc />
-    public async Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, WiegandFormat format, int cardToDoorDelayMs, int doorOpenMs)
+    public async Task SimulateAccessCycleAsync(ulong cardNumber, ushort facilityCode, WiegandFormat format, int cardToDoorDelayMs, int doorOpenMs)
     {
         await SendCardAsync(cardNumber, facilityCode, format).ConfigureAwait(false);
         if (cardToDoorDelayMs > 0)
@@ -245,7 +245,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
     }
 
     /// <inheritdoc />
-    public async Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format, int cardToDoorDelayMs, int doorOpenMs)
+    public async Task SimulateAccessCycleAsync(ulong cardNumber, ushort facilityCode, CustomCardFormat format, int cardToDoorDelayMs, int doorOpenMs)
     {
         await SendCardAsync(cardNumber, facilityCode, format).ConfigureAwait(false);
         if (cardToDoorDelayMs > 0)
@@ -328,7 +328,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
         }
     }
 
-    private static (ulong frame, int bitCount) BuildFrame(uint cardNumber, ushort facilityCode, WiegandFormat format) =>
+    private static (ulong frame, int bitCount) BuildFrame(ulong cardNumber, ushort facilityCode, WiegandFormat format) =>
         format switch
         {
             WiegandFormat.Wiegand26 => (WiegandTransmitter.BuildWiegand26(facilityCode, (ushort)cardNumber), 26),
@@ -338,7 +338,7 @@ public sealed class OsdpReaderSimulator : IReaderSimulator, IAsyncDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(format), format, null)
         };
 
-    private static (ulong frame, int bitCount) BuildFrame(uint cardNumber, ushort facilityCode, CustomCardFormat format)
+    private static (ulong frame, int bitCount) BuildFrame(ulong cardNumber, ushort facilityCode, CustomCardFormat format)
     {
         var encoder = new CardFormatEncoder(format.CardMask, format.Parity1Mask, format.Parity2Mask, format.Parity3Mask);
 

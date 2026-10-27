@@ -19,7 +19,7 @@ public class SimulationEventEntity
 
     public int? CardEntryId { get; set; }
 
-    public uint? CardNumber { get; set; }
+    public ulong? CardNumber { get; set; }
 
     public ushort? FacilityCode { get; set; }
 

@@ -27,7 +27,7 @@ public static class CardValidation
     /// the actual bit-width check happens once the format definition has been loaded from the database
     /// (see <see cref="CardFormatValidation.ValidateCredential" />).
     /// </summary>
-    public static string? ValidateCredential(uint cardNumber, ushort facilityCode, WiegandFormat format, int? customFormatId = null)
+    public static string? ValidateCredential(ulong cardNumber, ushort facilityCode, WiegandFormat format, int? customFormatId = null)
     {
         if (!Enum.IsDefined(format))
             return $"Invalid Wiegand format: {format}.";
@@ -49,7 +49,7 @@ public static class CardValidation
         };
     }
 
-    private static string? ValidateWiegand26(ushort facilityCode, uint cardNumber)
+    private static string? ValidateWiegand26(ushort facilityCode, ulong cardNumber)
     {
         if (facilityCode > 255)
             return $"Wiegand 26 facility code must be between 0 and 255 (8 bits). Provided: {facilityCode}.";
@@ -60,7 +60,7 @@ public static class CardValidation
         return null;
     }
 
-    private static string? ValidateWiegand34(ushort facilityCode, uint cardNumber)
+    private static string? ValidateWiegand34(ushort facilityCode, ulong cardNumber)
     {
         if (facilityCode > 255)
             return $"Wiegand 34 facility code must be between 0 and 255 (8 bits). Provided: {facilityCode}.";
@@ -71,15 +71,15 @@ public static class CardValidation
         return null;
     }
 
-    private static string? ValidateWiegand37(uint cardNumber)
+    private static string? ValidateWiegand37(ulong cardNumber)
     {
-        _ = cardNumber;
+        if (cardNumber > 34_359_738_367)
+            return $"Wiegand 37 card number must be between 0 and 34,359,738,367 (35 bits). Provided: {cardNumber}.";
 
-        // 35 data bits total; uint maxValue (4,294,967,295) is 32 bits, safely within 35 bits.
         return null;
     }
 
-    private static string? ValidateHidCorporate1000(ushort facilityCode, uint cardNumber)
+    private static string? ValidateHidCorporate1000(ushort facilityCode, ulong cardNumber)
     {
         if (facilityCode > 4_095)
             return $"HID Corporate 1000 facility code must be between 0 and 4,095 (12 bits). Provided: {facilityCode}.";

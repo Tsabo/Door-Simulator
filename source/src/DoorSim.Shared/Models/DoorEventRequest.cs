@@ -8,7 +8,7 @@ public record DoorEventRequest(int ReaderId, DoorEventType EventType, int? CardE
 public record RawDoorEventRequest(
     int ReaderId,
     DoorEventType EventType,
-    uint CardNumber,
+    ulong CardNumber,
     ushort FacilityCode,
     WiegandFormat Format,
     int? CustomFormatId = null);

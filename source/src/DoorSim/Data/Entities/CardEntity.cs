@@ -8,7 +8,7 @@ public class CardEntity
 
     public ushort FacilityCode { get; set; }
 
-    public uint CardNumber { get; set; }
+    public ulong CardNumber { get; set; }
 
     public WiegandFormat Format { get; set; }
 

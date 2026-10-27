@@ -173,17 +173,17 @@ public class McpSimulationToolsTests
 
         public Task SendCardAsync(CardEntry card) => Task.CompletedTask;
 
-        public Task SendCardAsync(uint cardNumber, ushort facilityCode, WiegandFormat format) => Task.CompletedTask;
+        public Task SendCardAsync(ulong cardNumber, ushort facilityCode, WiegandFormat format) => Task.CompletedTask;
 
-        public Task SendCardAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format) => Task.CompletedTask;
+        public Task SendCardAsync(ulong cardNumber, ushort facilityCode, CustomCardFormat format) => Task.CompletedTask;
 
         public Task SendBitsAsync(string bits) => Task.CompletedTask;
 
         public Task SimulateAccessCycleAsync(CardEntry card, int cardToDoorDelayMs, int doorOpenMs) => Task.CompletedTask;
 
-        public Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, WiegandFormat format, int cardToDoorDelayMs, int doorOpenMs) => Task.CompletedTask;
+        public Task SimulateAccessCycleAsync(ulong cardNumber, ushort facilityCode, WiegandFormat format, int cardToDoorDelayMs, int doorOpenMs) => Task.CompletedTask;
 
-        public Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format, int cardToDoorDelayMs, int doorOpenMs) => Task.CompletedTask;
+        public Task SimulateAccessCycleAsync(ulong cardNumber, ushort facilityCode, CustomCardFormat format, int cardToDoorDelayMs, int doorOpenMs) => Task.CompletedTask;
 
         public Task SimulateEgressCycleAsync(int rexLeadMs, int doorOpenMs) => Task.CompletedTask;
 

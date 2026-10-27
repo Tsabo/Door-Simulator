@@ -20,7 +20,7 @@ internal sealed class WiegandTransmitter(GpioController? gpio, int d0Pin, int d1
         Send(card.CardNumber, card.FacilityCode, card.Format);
 
     /// <summary>Transmit a credential from raw values.</summary>
-    public void Send(uint cardNumber, ushort facilityCode, WiegandFormat format)
+    public void Send(ulong cardNumber, ushort facilityCode, WiegandFormat format)
     {
         var (frame, bitCount) = format switch
         {
@@ -35,7 +35,7 @@ internal sealed class WiegandTransmitter(GpioController? gpio, int d0Pin, int d1
     }
 
     /// <summary>Transmit a credential using a user-defined <see cref="CustomCardFormat" />.</summary>
-    public void Send(uint cardNumber, ushort facilityCode, CustomCardFormat format)
+    public void Send(ulong cardNumber, ushort facilityCode, CustomCardFormat format)
     {
         var encoder = new CardFormatEncoder(format.CardMask, format.Parity1Mask, format.Parity2Mask, format.Parity3Mask);
         TransmitBits(encoder.Encode(cardNumber, facilityCode), format.CardMask.Length);
@@ -99,11 +99,11 @@ internal sealed class WiegandTransmitter(GpioController? gpio, int d0Pin, int d1
     /// OP = odd  parity of CN[15:0].
     /// FC is clamped to 8 bits; values > 255 use the lower 8 bits.
     /// </summary>
-    internal static ulong BuildWiegand34(ushort fc, uint cn)
+    internal static ulong BuildWiegand34(ushort fc, ulong cn)
     {
         // bit33=EP, bits32-25=FC[7:0], bits24-1=CN, bit0=OP
         // Mask FC to 8 bits to prevent overflow into the EP bit (bit 33).
-        ulong frame = (ulong)(fc & 0xFF) << 25 | (ulong)cn << 1;
+        ulong frame = (ulong)(fc & 0xFF) << 25 | cn << 1;
 
         var epBits = (uint)(frame >> 17 & 0xFFFF); // bits 32-17 (FC + CN[23:16])
         var opBits = (uint)(frame >> 1 & 0xFFFF); // bits 16-1  (CN[15:0])
@@ -123,12 +123,12 @@ internal sealed class WiegandTransmitter(GpioController? gpio, int d0Pin, int d1
     /// Wiegand37 (no FC): [EP(1)][CN(35)][OP(1)] = 37 bits.
     /// EP = even parity of CN[34:17] (top 18 bits).
     /// OP = odd  parity of CN[16:0]  (bottom 17 bits).
-    /// Note: CardNumber is uint (32-bit), so CN bits 34-32 are always 0.
+    /// CN is masked to 35 bits so it can't overflow into the EP bit.
     /// </summary>
-    internal static ulong BuildWiegand37(uint cn)
+    internal static ulong BuildWiegand37(ulong cn)
     {
         // bit36=EP, bits35-1=CN, bit0=OP
-        ulong frame = (ulong)cn << 1;
+        var frame = (cn & 0x7_FFFF_FFFF) << 1;
 
         var epBits = frame >> 18 & 0x3FFFF; // bits 35-18 (top 18 data bits)
         var opBits = frame >> 1 & 0x1FFFF; // bits 17-1  (bottom 17 data bits)
@@ -155,7 +155,7 @@ internal sealed class WiegandTransmitter(GpioController? gpio, int d0Pin, int d1
     /// pos 34 → bit 0  (LSB-0): trailing 0
     /// FC is 12-bit (0–4095); CN is 20-bit (0–1 048 575).
     /// </summary>
-    internal static ulong BuildHidCorporate1000(ushort fc, uint cn) => (ulong)(fc & 0xFFF) << 21 | (ulong)(cn & 0xFFFFF) << 1;
+    internal static ulong BuildHidCorporate1000(ushort fc, ulong cn) => (ulong)(fc & 0xFFF) << 21 | (cn & 0xFFFFF) << 1;
 
     // -------------------------------------------------------------------------
     // Transmission

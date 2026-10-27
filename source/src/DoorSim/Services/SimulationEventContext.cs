@@ -7,7 +7,7 @@ namespace DoorSim.Services;
 public record SimulationEventContext(
     SimulationEventKind Kind,
     int? CardEntryId = null,
-    uint? CardNumber = null,
+    ulong? CardNumber = null,
     ushort? FacilityCode = null,
     WiegandFormat? Format = null,
     string? RawBits = null,

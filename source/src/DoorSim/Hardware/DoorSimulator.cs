@@ -90,7 +90,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
     }
 
     /// <inheritdoc />
-    public Task SendCardAsync(uint cardNumber, ushort facilityCode, WiegandFormat format)
+    public Task SendCardAsync(ulong cardNumber, ushort facilityCode, WiegandFormat format)
     {
         EnsureWiegand();
         _logger.LogInformation(
@@ -101,7 +101,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
     }
 
     /// <inheritdoc />
-    public Task SendCardAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format)
+    public Task SendCardAsync(ulong cardNumber, ushort facilityCode, CustomCardFormat format)
     {
         EnsureWiegand();
         _logger.LogInformation(
@@ -139,7 +139,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, WiegandFormat format, int cardToDoorDelayMs, int doorOpenMs)
+    public async Task SimulateAccessCycleAsync(ulong cardNumber, ushort facilityCode, WiegandFormat format, int cardToDoorDelayMs, int doorOpenMs)
     {
         await SendCardAsync(cardNumber, facilityCode, format).ConfigureAwait(false);
         if (cardToDoorDelayMs > 0)
@@ -151,7 +151,7 @@ public sealed class DoorSimulator : IReaderSimulator, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task SimulateAccessCycleAsync(uint cardNumber, ushort facilityCode, CustomCardFormat format, int cardToDoorDelayMs, int doorOpenMs)
+    public async Task SimulateAccessCycleAsync(ulong cardNumber, ushort facilityCode, CustomCardFormat format, int cardToDoorDelayMs, int doorOpenMs)
     {
         await SendCardAsync(cardNumber, facilityCode, format).ConfigureAwait(false);
         if (cardToDoorDelayMs > 0)

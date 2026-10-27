@@ -16,7 +16,7 @@ public record SimulationEventRecord(
     SimulationEventKind Kind,
     SimulationEventOutcome Outcome,
     int? CardEntryId,
-    uint? CardNumber,
+    ulong? CardNumber,
     ushort? FacilityCode,
     WiegandFormat? Format,
     string? RawBits,
